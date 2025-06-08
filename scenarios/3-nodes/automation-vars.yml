@@ -63,7 +63,11 @@ stages:
       - "oc wait -n openstack-operators openstack openstack --for condition=Ready --timeout=300s"
 
   - name: Patch openstack leader election tuneables
-    script: "{{ openstack_operators_leadear_election_tune_script }}"
+    script: >-
+      {{
+        lookup('ansible.builtin.file',
+               '../common/scripts/leadear_election_tune.sh')
+      }}
     wait_conditions:
       # TODO(hjensas): Add proper wait conditions here.
       - sleep 10
@@ -126,6 +130,13 @@ stages:
 
   - name: EDPM nodeset
     manifest: manifests/edpm/edpm.yaml
+    patches:
+      - path: spec.nodeTemplate.ansible.ansibleVars.edpm_bootstrap_command
+        value: >-
+          {{
+            lookup('ansible.builtin.file',
+                   '../common/scripts/upstream_edpm_bootstrap_command.sh')
+          }}
     wait_conditions:
       - >-
         oc -n openstack wait openstackdataplanenodeset openstack-edpm

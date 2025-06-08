@@ -56,7 +56,7 @@ stages:
       - "oc wait -n openstack-operators service openstack-operator-webhook-service --for jsonpath='{.status.loadBalancer}' --timeout=300s"
 
   - name: Patch openstack leader election tuneables
-    script: "{{ openstack_operators_leadear_election_tune_script }}"
+    script: "{{ hotloop_openstack_operators_leadear_election_tune_script }}"
     wait_conditions:
       # TODO(hjensas): Add proper wait conditions here.
       - sleep 10

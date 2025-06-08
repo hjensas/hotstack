@@ -103,7 +103,7 @@ stages:
       - "sleep 120"  # The {.status.loadBalancer} wait conditions are not working?
 
   - name: Patch openstack leader election tuneables
-    script: "{{ openstack_operators_leadear_election_tune_script }}"
+    script: "{{ hotloop_openstack_operators_leadear_election_tune_script }}"
     wait_conditions:
       # TODO(hjensas): Add proper wait conditions here.
       - sleep 10
