@@ -1,0 +1,54 @@
+FROM localhost/hotstack-os-base-builder:latest AS builder
+
+ARG OPENSTACK_BRANCH=stable/2025.1
+
+# Clone and build Cinder from source
+RUN git clone --depth 1 --branch ${OPENSTACK_BRANCH} \
+        https://opendev.org/openstack/cinder /tmp/cinder && \
+    cd /tmp/cinder && \
+    pip3 install --no-cache-dir --break-system-packages \
+        -c https://opendev.org/openstack/requirements/raw/branch/${OPENSTACK_BRANCH}/upper-constraints.txt \
+        . pymysql python-memcached python-openstackclient && \
+    mkdir -p /etc/cinder /etc/cinder/rootwrap.d && \
+    cp /tmp/cinder/etc/cinder/api-paste.ini /etc/cinder/ && \
+    cp /tmp/cinder/etc/cinder/resource_filters.json /etc/cinder/ && \
+    cp /tmp/cinder/etc/cinder/rootwrap.conf /etc/cinder/ && \
+    cp /tmp/cinder/etc/cinder/rootwrap.d/* /etc/cinder/rootwrap.d/
+
+# Runtime stage
+FROM localhost/hotstack-os-base:latest
+
+ARG OPENSTACK_BRANCH=stable/2025.1
+ARG SERVICE_TYPE=api
+
+# Install Cinder-specific runtime dependencies
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        nfs-common \
+        kmod \
+        sudo \
+        qemu-utils \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy installed packages and config from builder
+COPY --from=builder /usr/local /usr/local
+COPY --from=builder /etc/cinder /etc/cinder
+
+# Create directories and user
+RUN mkdir -p /var/lib/cinder /var/lock/cinder /etc/cinder/rootwrap.d && \
+    (useradd -m -d /var/lib/cinder -s /bin/bash cinder || true) && \
+    chown -R cinder:cinder /var/lib/cinder /var/lock/cinder && \
+    echo 'cinder ALL=(root) NOPASSWD: /usr/local/bin/cinder-rootwrap /etc/cinder/rootwrap.conf *' > /etc/sudoers.d/cinder-rootwrap && \
+    chmod 0440 /etc/sudoers.d/cinder-rootwrap
+
+# Copy entrypoint scripts with permissions
+COPY --chmod=644 scripts/common.sh /usr/local/lib/common.sh
+COPY --chmod=755 scripts/cinder-api-entrypoint.sh /usr/local/bin/cinder-api-entrypoint.sh
+COPY --chmod=755 scripts/cinder-scheduler-entrypoint.sh /usr/local/bin/cinder-scheduler-entrypoint.sh
+COPY --chmod=755 scripts/cinder-volume-entrypoint.sh /usr/local/bin/cinder-volume-entrypoint.sh
+
+USER cinder
+WORKDIR /var/lib/cinder
+
+# Entrypoint will be overridden in compose file
+ENTRYPOINT ["/usr/local/bin/cinder-api-entrypoint.sh"]
