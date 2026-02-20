@@ -6,16 +6,39 @@ development and testing.
 
 ## Available Setup Guides
 
+### [HotStack-OS - Containerized Setup](hotstack-os/)
+
+A containerized OpenStack deployment using podman-compose that runs on your
+local workstation. Uses host libvirt and OpenvSwitch with all OpenStack
+services in containers.
+
+**Recommended for:**
+
+- **Quick development and testing** (10-15 minutes setup, 2-5 minutes to start)
+- Users who want reproducible, self-contained environments
+- Limited resources (no dedicated machine needed)
+
+**Getting Started:**
+
+1. See [hotstack-os/QUICKSTART.md](hotstack-os/QUICKSTART.md) for step-by-step setup
+2. See [hotstack-os/README.md](hotstack-os/README.md) for architecture and reference
+
+**Requirements:**
+
+- Linux workstation (Fedora/RHEL/CentOS) with libvirt and OpenvSwitch
+- 16GB+ RAM recommended, 50-200GB disk for VM instances
+
 ### [Packstack Setup](packstack.md)
 
 A quick and straightforward way to deploy OpenStack on CentOS Stream 9 using
 RDO Packstack. This is the fastest option for getting a working OpenStack
-environment.
+environment on a dedicated machine.
 
 **Recommended for:**
 
 - CentOS Stream 9 / RHEL-based systems
 - Users familiar with RDO/Packstack
+- Dedicated test machines or VMs
 
 ### [OpenStack-Ansible AIO Setup](osa.md)
 
@@ -27,13 +50,18 @@ deployment in a single node.
 
 - CentOS Stream 9 or 10 / RHEL-based systems
 - Users familiar with Openstack-Ansible
+- More production-like testing
 
 ## Choosing a Setup Method
 
-| Feature | Packstack | OpenStack-Ansible AIO |
-|---------|-----------|----------------------|
-| Base OS | CentOS Stream 9 | CentOS Stream 9 or 10 |
-| OpenStack Release | Dalmatian | Epoxy or later |
+| Feature | HotStack-OS | Packstack | OpenStack-Ansible AIO |
+|---------|-------------|-----------|------------------------|
+| **Deployment Time** | 2-5 minutes | 30-60 minutes | 60-120 minutes |
+| **Host OS** | Fedora/RHEL/CentOS | CentOS Stream 9 | CentOS Stream 9 or 10 |
+| **OpenStack Release** | stable/2025.1 (Epoxy) | Dalmatian | Epoxy or later |
+| **Resource Overhead** | Low (containers) | Medium | High |
+| **Requires Dedicated Machine** | No | Yes | Yes |
+| **Production-like** | No | Yes | Yes |
 
 ## Common Post-Installation Steps
 

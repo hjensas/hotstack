@@ -1,0 +1,15 @@
+# Environment file with passwords
+.env
+
+# OpenStack credentials
+clouds.yaml
+
+# Temporary files
+*.log
+*.pid
+*.sock
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo

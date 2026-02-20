@@ -1,0 +1,21 @@
+clouds:
+  hotstack-os-admin:
+    auth:
+      auth_url: http://keystone.hotstack-os.local:5000/v3
+      project_name: admin
+      username: admin
+      password: admin
+      project_domain_name: Default
+      user_domain_name: Default
+    region_name: RegionOne
+    identity_api_version: '3'
+  hotstack-os:
+    auth:
+      auth_url: http://keystone.hotstack-os.local:5000/v3
+      project_name: hotstack
+      username: hotstack
+      password: hotstack
+      project_domain_name: Default
+      user_domain_name: Default
+    region_name: RegionOne
+    identity_api_version: '3'

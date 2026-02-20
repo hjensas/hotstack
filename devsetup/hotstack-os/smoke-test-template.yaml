@@ -1,0 +1,246 @@
+---
+# Copyright Red Hat, Inc.
+# All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License"); you may
+# not use this file except in compliance with the License. You may obtain
+# a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+# WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+# License for the specific language governing permissions and limitations
+# under the License.
+
+heat_template_version: rocky
+
+description: >
+  Smoke test Heat template for HotStack-OS.
+  Creates a minimal but comprehensive test environment with:
+  - Networks, subnets, and router
+  - Instance 1: Volume boot (boot volume only, with trunk port for VLAN testing)
+  - Instance 2: Image boot with extra volumes (like ironic/master nodes)
+  - Floating IPs
+  - Cloud-init configuration
+
+parameters:
+  keypair_name:
+    type: string
+    description: Name of the keypair to use for SSH access
+    default: hotstack-smoke-test
+
+  image_name:
+    type: string
+    description: Image to use for instances
+    default: cirros
+
+  flavor_name:
+    type: string
+    description: Flavor to use for instances
+    default: hotstack.small
+
+  external_network:
+    type: string
+    description: External network for floating IPs
+    default: external
+
+resources:
+  #
+  # Networks
+  #
+  test-net:
+    type: OS::Neutron::Net
+    properties:
+      port_security_enabled: false
+
+  vlan-net:
+    type: OS::Neutron::Net
+    properties:
+      port_security_enabled: false
+
+  #
+  # Subnets
+  #
+  test-subnet:
+    type: OS::Neutron::Subnet
+    properties:
+      network: {get_resource: test-net}
+      ip_version: 4
+      cidr: 192.168.200.0/24
+      enable_dhcp: true
+      dns_nameservers:
+        - 8.8.8.8
+
+  vlan-subnet:
+    type: OS::Neutron::Subnet
+    properties:
+      network: {get_resource: vlan-net}
+      ip_version: 4
+      cidr: 192.168.201.0/24
+      enable_dhcp: false
+
+  #
+  # Router
+  #
+  router:
+    type: OS::Neutron::Router
+    properties:
+      external_gateway_info:
+        network: {get_param: external_network}
+
+  router-interface:
+    type: OS::Neutron::RouterInterface
+    properties:
+      router: {get_resource: router}
+      subnet: {get_resource: test-subnet}
+
+  #
+  # Extra volumes for instance2 (image boot with attached volumes)
+  #
+  instance2-extra-volume:
+    type: OS::Cinder::Volume
+    properties:
+      size: 3
+
+  #
+  # Ports for Instance 1 (Volume Boot with Trunk)
+  #
+  instance1-port:
+    type: OS::Neutron::Port
+    properties:
+      network: {get_resource: test-net}
+      port_security_enabled: false
+
+  instance1-vlan-port:
+    type: OS::Neutron::Port
+    properties:
+      network: {get_resource: vlan-net}
+      port_security_enabled: false
+      fixed_ips:
+        - ip_address: 192.168.201.10
+
+  instance1-trunk:
+    type: OS::Neutron::Trunk
+    properties:
+      port: {get_resource: instance1-port}
+      sub_ports:
+        - port: {get_resource: instance1-vlan-port}
+          segmentation_id: 100
+          segmentation_type: vlan
+
+  #
+  # Ports for Instance 2 (Image Boot with Volumes)
+  #
+  instance2-port:
+    type: OS::Neutron::Port
+    properties:
+      network: {get_resource: test-net}
+      port_security_enabled: false
+
+  #
+  # Floating IPs
+  #
+  instance1-floating-ip:
+    depends_on: router-interface
+    type: OS::Neutron::FloatingIP
+    properties:
+      floating_network: {get_param: external_network}
+      port_id: {get_resource: instance1-port}
+
+  instance2-floating-ip:
+    depends_on: router-interface
+    type: OS::Neutron::FloatingIP
+    properties:
+      floating_network: {get_param: external_network}
+      port_id: {get_resource: instance2-port}
+
+  #
+  # Cloud-init configuration
+  #
+  instance-cloud-config:
+    type: OS::Heat::CloudConfig
+    properties:
+      cloud_config:
+        users:
+          - default
+        runcmd:
+          - echo "HotStack-OS smoke test instance initialized" > /tmp/smoke-test-init
+          - date >> /tmp/smoke-test-init
+
+  #
+  # Instance 1: Volume Boot (boot volume only)
+  #
+  instance1:
+    type: OS::Nova::Server
+    properties:
+      flavor: {get_param: flavor_name}
+      key_name: {get_param: keypair_name}
+      block_device_mapping_v2:
+        - device_type: disk
+          boot_index: 0
+          image_id: {get_param: image_name}
+          volume_size: 5
+          delete_on_termination: true
+      networks:
+        - port: {get_resource: instance1-port}
+      user_data_format: RAW
+      user_data: {get_resource: instance-cloud-config}
+
+  #
+  # Instance 2: Image Boot with Extra Volumes
+  #
+  instance2:
+    depends_on: instance2-extra-volume
+    type: OS::Nova::Server
+    properties:
+      image: {get_param: image_name}
+      flavor: {get_param: flavor_name}
+      key_name: {get_param: keypair_name}
+      block_device_mapping_v2:
+        - boot_index: -1
+          device_type: disk
+          volume_id: {get_resource: instance2-extra-volume}
+      networks:
+        - port: {get_resource: instance2-port}
+      user_data_format: RAW
+      user_data: {get_resource: instance-cloud-config}
+
+outputs:
+  instance1_name:
+    description: Instance 1 name
+    value: {get_attr: [instance1, name]}
+
+  instance1_floating_ip:
+    description: Instance 1 floating IP address
+    value: {get_attr: [instance1-floating-ip, floating_ip_address]}
+
+  instance1_fixed_ip:
+    description: Instance 1 fixed IP address
+    value: {get_attr: [instance1-port, fixed_ips, 0, ip_address]}
+
+  instance2_name:
+    description: Instance 2 name
+    value: {get_attr: [instance2, name]}
+
+  instance2_floating_ip:
+    description: Instance 2 floating IP address
+    value: {get_attr: [instance2-floating-ip, floating_ip_address]}
+
+  instance2_fixed_ip:
+    description: Instance 2 fixed IP address
+    value: {get_attr: [instance2-port, fixed_ips, 0, ip_address]}
+
+  network_id:
+    description: Test network ID
+    value: {get_resource: test-net}
+
+  router_id:
+    description: Test router ID
+    value: {get_resource: router}
+
+  volumes:
+    description: Volume information
+    value:
+      instance2_extra_volume: {get_resource: instance2-extra-volume}
