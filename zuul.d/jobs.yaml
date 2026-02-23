@@ -98,8 +98,8 @@
           ironic_params:
             image: cs9stream-genericcloud
             cd_image: sushy-tools-blank-image
-            # vpu: 1 ram 2GB disk: 20GB
-            flavor: ci.m1.small
+            # vpu: 2 ram 4GB disk: 40GB
+            flavor: ci.m1.medium
     run:
       - ci/playbooks/run-deploy.yml
       - ci/playbooks/run-tests.yml
@@ -161,8 +161,8 @@
           ironic_params:
             image: cs9stream-genericcloud
             cd_image: sushy-tools-blank-image
-            # vpu: 1 ram 2GB disk: 20GB
-            flavor: ci.m1.small
+            # vpu: 2 ram 4GB disk: 40GB
+            flavor: ci.m1.medium
     run:
       - ci/playbooks/run-deploy.yml
       - ci/playbooks/run-tests.yml
@@ -230,7 +230,7 @@
           ironic_params:
             image: cs9stream-genericcloud
             cd_image: sushy-tools-blank-image
-            # vpu: 1 ram 2GB disk: 20GB
+            # vpu: 2 ram 4GB disk: 40GB
             flavor: ci.m1.small
     run:
       - ci/playbooks/run-deploy.yml
@@ -293,8 +293,8 @@
           ironic_params:
             image: sushy-tools-blank-image
             cd_image: sushy-tools-blank-image
-            # vpu: 1 ram 2GB disk: 20GB
-            flavor: ci.m1.small
+            # vpu: 2 ram 4GB disk: 40GB
+            flavor: ci.m1.medium
           cdrom_disk_bus: sata
     run:
       - ci/playbooks/run-deploy.yml
