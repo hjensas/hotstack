@@ -209,8 +209,11 @@ spec:
           [conductor]
           power_state_change_timeout = 120
 
+          [pxe]
+          kernel_append_params = console=ttyS0 ipa-debug=1
+
           [redfish]
-          kernel_append_params = console=ttyS0
+          kernel_append_params = console=ttyS0 ipa-debug=1
 
           [neutron]
           cleaning_network = provisioning
