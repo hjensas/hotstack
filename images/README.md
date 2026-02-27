@@ -11,7 +11,8 @@ deployments. The tasks are executed using the `make` utility.
 ## Images
 
 - **controller**: A customized CentOS 9 Stream image with packages needed for
-  the hotstack controller node
+  the hotstack controller node. Built using diskimage-builder (DIB) with custom
+  elements.
 - **blank**: A minimal blank image used for virtual baremetal node disks with
   Redfish virtual BMC
 - **nat64**: A NAT64 appliance image built using ci-framework for IPv6-only
@@ -21,13 +22,15 @@ deployments. The tasks are executed using the `make` utility.
 
 ## Variables
 
-- `CONTROLLER_IMAGE_URL`: The URL to download the CentOS 9 Stream controller
-  image.
-- `CONTROLLER_IMAGE_NAME`: The name of the downloaded image file.
+- `CONTROLLER_IMAGE_NAME`: The name of the controller image file to be created
+  (default: `controller.qcow2`).
 - `CONTROLLER_IMAGE_FORMAT`: The desired format for the controller image
-  (default: `raw`). Set to `qcow2` to keep the original format.
-- `CONTROLLER_INSTALL_PACKAGES`: A list of packages to install on the
-  controller image.
+  (default: `raw`). Set to `qcow2` to skip conversion and keep the original
+  DIB output format.
+- `CONTROLLER_DIB_VENV`: Path to the Python virtual environment for
+  diskimage-builder (default: `~/controller-dib-venv`).
+- `CONTROLLER_DIB_WORKDIR`: Working directory for DIB build artifacts and cache
+  (default: `.controller-build`).
 - `BLANK_IMAGE_NAME`: The name of the blank image file to be created.
 - `BLANK_IMAGE_FORMAT`: The format for the blank image (default: `raw`). Can be
   set to `qcow2` or any format supported by `qemu-img`.
@@ -58,15 +61,18 @@ directly use qcow2 images for VM disks.
 - `all`: The default target that depends on `controller`, `blank`, and `nat64`.
 - `clean`: A target that removes the controller, blank, and NAT64 images, as
   well as build artifacts.
-- `controller`: A target that depends on `controller_download`,
-  `controller_customize`, and `controller_convert`.
-  - `controller_download`: A target that downloads the controller image from
-    the specified URL.
-  - `controller_customize`: A target that customizes the downloaded image by
-    installing the specified packages and relabeling SELinux.
-  - `controller_convert`: A target that converts the image to the format
-    specified by `CONTROLLER_IMAGE_FORMAT` (in-place conversion if `raw`).
-  - `controller_clean`: A target that removes the controller image file.
+- `controller`: Builds the controller image using diskimage-builder (DIB).
+  Depends on `controller_dib_setup`, `controller_dib_build`, and
+  `controller_convert`.
+  - `controller_dib_setup`: Creates a Python virtual environment and installs
+    diskimage-builder.
+  - `controller_dib_build`: Builds the controller image using DIB with the
+    configuration from `controller-image.yaml` and the custom `hotstack-controller`
+    element from `elements/`.
+  - `controller_convert`: Converts the image to the format specified by
+    `CONTROLLER_IMAGE_FORMAT` (in-place conversion if `raw`).
+  - `controller_clean`: Removes the controller image, virtual environment, and
+    build artifacts.
 - `blank`: A target that creates a blank image file of the specified size in the
   format specified by `BLANK_IMAGE_FORMAT`.
 - `blank_clean`: A target that removes the blank image file.
@@ -103,17 +109,30 @@ make clean
 
 ### Building and uploading the controller image to glance
 
-1. Build the controller image:
+1. Build the controller image (using diskimage-builder):
 
    ```shell
    make controller
    ```
+
+   This will create a Python virtual environment, install diskimage-builder,
+   build the image using the configuration from `controller-image.yaml`, and
+   convert it to raw format (default).
 
 2. Upload the controller image to Glance:
 
    ```shell
    openstack image create hotstack-controller \
      --disk-format raw \
+     --file controller.qcow2
+   ```
+
+   **Note**: To build as qcow2 without conversion:
+
+   ```shell
+   make controller CONTROLLER_IMAGE_FORMAT=qcow2
+   openstack image create hotstack-controller \
+     --disk-format qcow2 \
      --file controller.qcow2
    ```
 

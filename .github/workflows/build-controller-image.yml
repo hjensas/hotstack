@@ -25,35 +25,30 @@ jobs:
 
       - name: 2. Install System Dependencies
         run: |
-          echo "Installing system dependencies for image building..."
+          echo "Installing system dependencies for diskimage-builder..."
           sudo apt-get update
           sudo apt-get install -y \
+            python3-pip \
+            python3-venv \
             qemu-utils \
-            libguestfs-tools \
-            curl \
+            dosfstools \
+            xfsprogs \
+            kpartx \
+            debootstrap \
+            gdisk \
+            git \
             make
           echo "System dependencies installed"
 
-      - name: 3. Make Kernel Readable for libguestfs
+      - name: 3. Build Controller Image Using Makefile (DIB)
         run: |
-          echo "Making kernel readable for libguestfs..."
-          sudo chmod +r /boot/vmlinuz-*
-          ls -lh /boot/vmlinuz-*
-          echo "Kernel permissions updated"
-
-      - name: 4. Build Controller Image Using Makefile
-        run: |
-          echo "Building controller image using images/Makefile..."
+          echo "Building controller image using diskimage-builder..."
           cd images
           make controller CONTROLLER_IMAGE_FORMAT=qcow2
           echo "Controller image built successfully"
           ls -lh controller.qcow2
           qemu-img info controller.qcow2
           cd ..
-        env:
-          LIBGUESTFS_BACKEND: direct
-          LIBGUESTFS_DEBUG: 1
-          LIBGUESTFS_TRACE: 1
 
       - name: 5. Rename Image with Release Tag
         id: release_tag
@@ -80,12 +75,14 @@ jobs:
 
             ## Image Details
 
-            - **Base**: CentOS Stream 9 (latest)
+            - **Base**: CentOS Stream 9
+            - **Build Tool**: diskimage-builder (DIB)
             - **Format**: qcow2
-            - **Packages**: git, dnsmasq, vim-enhanced, tmux, bind-utils, httpd,
-              httpd-tools, podman, butane, bash-completion, haproxy, nmstate,
-              tcpdump, make, nfs-utils
+            - **Packages**: bash-completion, bind-utils, butane, dnsmasq, git,
+              haproxy, httpd, httpd-tools, make, nfs-utils, nmstate, podman,
+              tcpdump, tmux, vim-enhanced
             - **Timezone**: UTC
+            - **Partitioning**: EFI boot support with GPT
 
             ## Usage
 

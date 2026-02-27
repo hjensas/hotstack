@@ -1,0 +1,16 @@
+---
+bash-completion:
+bind-utils:
+butane:
+dnsmasq:
+git:
+haproxy:
+httpd:
+httpd-tools:
+make:
+nfs-utils:
+nmstate:
+podman:
+tcpdump:
+tmux:
+vim-enhanced:
