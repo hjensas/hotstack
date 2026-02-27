@@ -4,10 +4,10 @@ name: Build Blank Image
 "on":
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
-    inputs:
-      release_tag:
-        description: 'Release tag (e.g., v1.0.0)'
-        required: true
+
+  # Run quarterly on the 1st day of Jan/Apr/Jul/Oct at 00:00 UTC
+  schedule:
+    - cron: '0 0 1 1,4,7,10 *'
 
 jobs:
   build-image:
@@ -45,7 +45,8 @@ jobs:
       - name: 4. Rename Image with Release Tag
         id: release_tag
         run: |
-          RELEASE_TAG="${{ inputs.release_tag }}"
+          # Generate timestamp-based tag
+          RELEASE_TAG="build-$(date +%Y%m%d-%H%M%S)"
           echo "release_tag=$RELEASE_TAG" >> $GITHUB_OUTPUT
           echo "Release tag: $RELEASE_TAG"
 
@@ -70,6 +71,7 @@ jobs:
 
             - **Format**: qcow2
             - **Size**: 1MB
+            - **Build type**: ${{ github.event_name == 'schedule' && 'Scheduled (quarterly)' || 'Manual' }}
             - **Purpose**: Minimal blank disk image for virtual baremetal nodes with Redfish virtual BMC
 
             ## Usage
@@ -159,5 +161,27 @@ jobs:
 
           echo "Static URL available at:"
           echo "https://github.com/${{ github.repository }}/releases/download/latest-blank/blank-image-latest.qcow2"
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: 8. Cleanup Old Releases (Keep Last 4)
+        run: |
+          echo "Cleaning up old builds, keeping last 4..."
+
+          # Get all releases with 'build-' prefix, sort by creation date (newest first)
+          # Skip the first 4 (keep them), delete the rest
+          OLD_RELEASES=$(gh release list --limit 100 --json tagName,createdAt --repo ${{ github.repository }} \
+            | jq -r '.[] | select(.tagName | startswith("build-")) | .tagName' \
+            | sort -r \
+            | tail -n +5)
+
+          if [ -n "$OLD_RELEASES" ]; then
+            echo "Deleting old releases:"
+            echo "$OLD_RELEASES"
+            echo "$OLD_RELEASES" | xargs -I {} gh release delete {} --yes --cleanup-tag --repo ${{ github.repository }}
+            echo "Cleanup complete"
+          else
+            echo "No old releases to delete (fewer than 5 total)"
+          fi
         env:
           GH_TOKEN: ${{ github.token }}
