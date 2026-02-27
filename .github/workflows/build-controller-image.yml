@@ -34,7 +34,14 @@ jobs:
             make
           echo "System dependencies installed"
 
-      - name: 3. Build Controller Image Using Makefile
+      - name: 3. Make Kernel Readable for libguestfs
+        run: |
+          echo "Making kernel readable for libguestfs..."
+          sudo chmod +r /boot/vmlinuz-*
+          ls -lh /boot/vmlinuz-*
+          echo "Kernel permissions updated"
+
+      - name: 4. Build Controller Image Using Makefile
         run: |
           echo "Building controller image using images/Makefile..."
           cd images
@@ -48,7 +55,7 @@ jobs:
           LIBGUESTFS_DEBUG: 1
           LIBGUESTFS_TRACE: 1
 
-      - name: 4. Rename Image with Release Tag
+      - name: 5. Rename Image with Release Tag
         id: release_tag
         run: |
           RELEASE_TAG="${{ inputs.release_tag }}"
@@ -63,7 +70,7 @@ jobs:
           echo "Image renamed to: $TAGGED_IMAGE"
           ls -lh ${TAGGED_IMAGE}
 
-      - name: 5. Create Versioned GitHub Release
+      - name: 6. Create Versioned GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.release_tag.outputs.release_tag }}
@@ -105,7 +112,7 @@ jobs:
             ```
           files: ${{ steps.release_tag.outputs.tagged_image }}
 
-      - name: 6. Update 'latest' Release Tag
+      - name: 7. Update 'latest' Release Tag
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest
@@ -144,7 +151,7 @@ jobs:
             ```
           files: ${{ steps.release_tag.outputs.tagged_image }}
 
-      - name: 7. Upload Image with Static Filename to Latest Release
+      - name: 8. Upload Image with Static Filename to Latest Release
         run: |
           echo "Creating static filename copy for easy downloading..."
 
