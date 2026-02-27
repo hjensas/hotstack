@@ -1,7 +1,7 @@
-CONTROLLER_IMAGE_URL         ?= https://cloud.centos.org/centos/9-stream/x86_64/images/CentOS-Stream-GenericCloud-x86_64-9-latest.x86_64.qcow2
 CONTROLLER_IMAGE_NAME        ?= controller.qcow2
 CONTROLLER_IMAGE_FORMAT      ?= raw
-CONTROLLER_INSTALL_PACKAGES  ?= git,dnsmasq,vim-enhanced,tmux,bind-utils,httpd,httpd-tools,podman,butane,bash-completion,haproxy,nmstate,tcpdump,make,nfs-utils
+CONTROLLER_DIB_VENV          ?= $(HOME)/controller-dib-venv
+CONTROLLER_DIB_WORKDIR       ?= $(CURDIR)/.controller-build
 BLANK_IMAGE_NAME             ?= blank-image.qcow2
 BLANK_IMAGE_FORMAT           ?= raw
 BLANK_IMAGE_SIZE             ?= 1M
@@ -26,13 +26,29 @@ all: controller blank nat64
 
 clean: controller_clean blank_clean nat64_clean
 
-controller: controller_downlaod controller_customize controller_convert
+controller: controller_dib_setup controller_dib_build controller_convert
 
-controller_downlaod:
-	curl -L -o $(CONTROLLER_IMAGE_NAME) $(CONTROLLER_IMAGE_URL)
+controller_dib_setup:
+	@if [ ! -d "$(CONTROLLER_DIB_VENV)" ]; then \
+		echo "Creating Python virtual environment at $(CONTROLLER_DIB_VENV)..."; \
+		python3 -m venv $(CONTROLLER_DIB_VENV); \
+		. $(CONTROLLER_DIB_VENV)/bin/activate && \
+		pip install --upgrade pip setuptools wheel && \
+		pip install diskimage-builder; \
+	else \
+		echo "Virtual environment already exists at $(CONTROLLER_DIB_VENV)"; \
+	fi
 
-controller_customize:
-	virt-customize -a $(CONTROLLER_IMAGE_NAME) --install $(CONTROLLER_INSTALL_PACKAGES) --timezone UTC --selinux-relabel
+controller_dib_build: controller_dib_setup
+	@echo "Building controller image using diskimage-builder..."
+	@mkdir -p $(CONTROLLER_DIB_WORKDIR)/cache
+	@. $(CONTROLLER_DIB_VENV)/bin/activate && \
+		cd $(CURDIR) && \
+		ELEMENTS_PATH=$(CURDIR)/elements \
+		DIB_IMAGE_CACHE=$(CONTROLLER_DIB_WORKDIR)/cache \
+		DIB_DEBUG_TRACE=1 \
+		diskimage-builder controller-image.yaml
+	@echo "Controller image built successfully: $(CONTROLLER_IMAGE_NAME)"
 
 controller_convert:
 ifeq ($(CONTROLLER_IMAGE_FORMAT),raw)
@@ -45,6 +61,14 @@ endif
 controller_clean:
 	rm -f $(CONTROLLER_IMAGE_NAME)
 	rm -f $(CONTROLLER_IMAGE_NAME).tmp
+	rm -rf $(CONTROLLER_DIB_VENV)
+	@if [ -z "$(CONTROLLER_DIB_WORKDIR)" ] || [ "$(CONTROLLER_DIB_WORKDIR)" = "/" ]; then \
+		echo "ERROR: CONTROLLER_DIB_WORKDIR is not set or is dangerous: $(CONTROLLER_DIB_WORKDIR)"; \
+		exit 1; \
+	fi
+	@if [ -d "$(CONTROLLER_DIB_WORKDIR)" ]; then \
+		sudo rm -rf $(CONTROLLER_DIB_WORKDIR); \
+	fi
 
 blank:
 	qemu-img create -f $(BLANK_IMAGE_FORMAT) $(BLANK_IMAGE_NAME) $(BLANK_IMAGE_SIZE)
@@ -84,7 +108,13 @@ nat64_clean:
 	rm -f $(NAT64_IMAGE_NAME)
 	rm -f $(NAT64_IMAGE_NAME).tmp
 	rm -rf $(NAT64_CIFMW_DIR)
-	sudo rm -rf $(NAT64_BASEDIR)
+	@if [ -z "$(NAT64_BASEDIR)" ] || [ "$(NAT64_BASEDIR)" = "/" ]; then \
+		echo "ERROR: NAT64_BASEDIR is not set or is dangerous: $(NAT64_BASEDIR)"; \
+		exit 1; \
+	fi
+	@if [ -d "$(NAT64_BASEDIR)" ]; then \
+		sudo rm -rf $(NAT64_BASEDIR); \
+	fi
 	rm -rf $(HOME)/test-python
 
 switch-host: switch-host_download switch-host_copy switch-host_customize switch-host_convert
