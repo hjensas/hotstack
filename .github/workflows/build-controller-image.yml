@@ -109,10 +109,10 @@ jobs:
             ```
           files: ${{ steps.release_tag.outputs.tagged_image }}
 
-      - name: 7. Update 'latest' Release Tag
+      - name: 7. Update 'latest-controller' Release Tag
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: latest
+          tag_name: latest-controller
           name: "Controller Image (Latest)"
           prerelease: true
           body: |
@@ -124,7 +124,7 @@ jobs:
 
             Use the static URL for the latest build:
             ```bash
-            curl -L -O https://github.com/${{ github.repository }}/releases/download/latest/controller-latest.qcow2
+            curl -L -O https://github.com/${{ github.repository }}/releases/download/latest-controller/controller-latest.qcow2
             ```
 
             Or download a specific version from the [releases page](https://github.com/${{ github.repository }}/releases)
@@ -155,11 +155,11 @@ jobs:
           # Copy the image with a static name
           cp ${{ steps.release_tag.outputs.tagged_image }} controller-latest.qcow2
 
-          echo "Uploading to latest release with static filename..."
-          # Upload to latest release, replacing any existing file with the same name
-          gh release upload latest controller-latest.qcow2 --clobber --repo ${{ github.repository }}
+          echo "Uploading to latest-controller release with static filename..."
+          # Upload to latest-controller release, replacing any existing file with the same name
+          gh release upload latest-controller controller-latest.qcow2 --clobber --repo ${{ github.repository }}
 
           echo "Static URL available at:"
-          echo "https://github.com/${{ github.repository }}/releases/download/latest/controller-latest.qcow2"
+          echo "https://github.com/${{ github.repository }}/releases/download/latest-controller/controller-latest.qcow2"
         env:
           GH_TOKEN: ${{ github.token }}
