@@ -102,10 +102,10 @@ jobs:
             ```
           files: ${{ steps.release_tag.outputs.tagged_image }}
 
-      - name: 6. Update 'latest' Release Tag
+      - name: 6. Update 'latest-blank' Release Tag
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: latest
+          tag_name: latest-blank
           name: "Blank Image (Latest)"
           prerelease: true
           body: |
@@ -117,7 +117,7 @@ jobs:
 
             Use the static URL for the latest build:
             ```bash
-            curl -L -O https://github.com/${{ github.repository }}/releases/download/latest/blank-image-latest.qcow2
+            curl -L -O https://github.com/${{ github.repository }}/releases/download/latest-blank/blank-image-latest.qcow2
             ```
 
             Or download a specific version from the [releases page](https://github.com/${{ github.repository }}/releases)
@@ -154,11 +154,11 @@ jobs:
           # Copy the image with a static name
           cp ${{ steps.release_tag.outputs.tagged_image }} blank-image-latest.qcow2
 
-          echo "Uploading to latest release with static filename..."
-          # Upload to latest release, replacing any existing file with the same name
-          gh release upload latest blank-image-latest.qcow2 --clobber --repo ${{ github.repository }}
+          echo "Uploading to latest-blank release with static filename..."
+          # Upload to latest-blank release, replacing any existing file with the same name
+          gh release upload latest-blank blank-image-latest.qcow2 --clobber --repo ${{ github.repository }}
 
           echo "Static URL available at:"
-          echo "https://github.com/${{ github.repository }}/releases/download/latest/blank-image-latest.qcow2"
+          echo "https://github.com/${{ github.repository }}/releases/download/latest-blank/blank-image-latest.qcow2"
         env:
           GH_TOKEN: ${{ github.token }}
