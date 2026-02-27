@@ -119,6 +119,8 @@ openstack security group rule create ${HOTSTACK_SG} \
 
 ### Upload Images
 
+#### CentOS Stream 9 Cloud Image
+
 Download and upload the CentOS Stream 9 cloud image:
 
 ```shell
@@ -131,6 +133,85 @@ openstack image create CentOS-Stream-GenericCloud-9 \
   --file CentOS-Stream-GenericCloud-x86_64-9-latest.x86_64.qcow2 \
   --public
 ```
+
+#### HotStack Controller Image
+
+Download and upload the HotStack controller image:
+
+```shell
+curl -L -O https://github.com/openstack-k8s-operators/hotstack/releases/download/latest-controller/controller-latest.qcow2
+openstack image create hotstack-controller \
+  --disk-format qcow2 \
+  --file controller-latest.qcow2 \
+  --public
+```
+
+#### iPXE Boot Images
+
+Download and upload the iPXE boot images for network booting:
+
+```shell
+# Download iPXE images
+curl -L -O https://github.com/openstack-k8s-operators/hotstack/releases/download/latest-ipxe/ipxe-bios-latest.img
+curl -L -O https://github.com/openstack-k8s-operators/hotstack/releases/download/latest-ipxe/ipxe-efi-latest.img
+
+# Upload BIOS boot image (used for OCP nodes)
+openstack image create ipxe-boot-usb \
+  --disk-format raw \
+  --file ipxe-bios-latest.img \
+  --property os_shutdown_timeout=5 \
+  --public
+
+# Upload UEFI rescue image
+openstack image create ipxe-rescue-uefi \
+  --disk-format raw \
+  --file ipxe-efi-latest.img \
+  --property os_shutdown_timeout=5 \
+  --property hw_firmware_type=uefi \
+  --property hw_machine_type=q35 \
+  --public
+
+# Upload BIOS rescue image
+openstack image create ipxe-rescue-bios \
+  --disk-format raw \
+  --file ipxe-bios-latest.img \
+  --property os_shutdown_timeout=5 \
+  --public
+```
+
+#### Blank Image (for virtual baremetal)
+
+If using virtual baremetal with sushy-emulator, download and upload the blank image:
+
+```shell
+curl -L -O https://github.com/openstack-k8s-operators/hotstack/releases/download/latest-blank/blank-image-latest.qcow2
+openstack image create sushy-tools-blank-image \
+  --disk-format qcow2 \
+  --file blank-image-latest.qcow2 \
+  --property hw_firmware_type=uefi \
+  --property hw_machine_type=q35 \
+  --property os_shutdown_timeout=5 \
+  --public
+```
+
+#### NAT64 Appliance Image (for IPv6-only environments)
+
+If using IPv6-only networks, download and upload the NAT64 appliance image:
+
+```shell
+curl -L -O https://github.com/openstack-k8s-operators/openstack-k8s-operators-ci/releases/download/latest/nat64-appliance-latest.qcow2
+openstack image create nat64-appliance \
+  --disk-format qcow2 \
+  --file nat64-appliance-latest.qcow2 \
+  --property hw_firmware_type=uefi \
+  --property hw_machine_type=q35 \
+  --public
+```
+
+For building images locally or for more details, see:
+
+- [Building images](../images/README.md)
+- [Building iPXE images](../ipxe/README.md)
 
 ### Configure Networking
 

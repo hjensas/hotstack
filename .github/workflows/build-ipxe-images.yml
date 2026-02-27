@@ -1,0 +1,174 @@
+---
+name: Build iPXE Images
+
+"on":
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Release tag (e.g., v1.0.0)'
+        required: true
+
+jobs:
+  build-image:
+    runs-on: ubuntu-22.04
+
+    # Permission needed to create a release and upload assets
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install System Dependencies
+        run: |
+          echo "Installing system dependencies for iPXE build..."
+          sudo apt-get update
+          sudo apt-get install -y \
+            gcc \
+            make \
+            perl \
+            git \
+            libguestfs-tools
+          echo "System dependencies installed"
+
+      - name: Build iPXE Images
+        run: |
+          echo "Building iPXE images using ipxe/Makefile..."
+          cd ipxe
+          make
+          echo "iPXE images built successfully"
+          ls -lh efi.img ipxe-boot-usb.raw
+          cd ..
+
+      - name: Create Release Tag and Rename Images
+        id: release_tag
+        run: |
+          RELEASE_TAG="${{ inputs.release_tag }}"
+          echo "release_tag=$RELEASE_TAG" >> $GITHUB_OUTPUT
+          echo "Release tag: $RELEASE_TAG"
+
+          # Rename images to include the release tag
+          TAGGED_EFI_IMAGE="ipxe-efi-${RELEASE_TAG}.img"
+          TAGGED_BIOS_IMAGE="ipxe-bios-${RELEASE_TAG}.img"
+
+          cp ipxe/efi.img ${TAGGED_EFI_IMAGE}
+          cp ipxe/ipxe-boot-usb.raw ${TAGGED_BIOS_IMAGE}
+
+          echo "tagged_efi_image=$TAGGED_EFI_IMAGE" >> $GITHUB_OUTPUT
+          echo "tagged_bios_image=$TAGGED_BIOS_IMAGE" >> $GITHUB_OUTPUT
+
+          echo "Images renamed:"
+          ls -lh ${TAGGED_EFI_IMAGE} ${TAGGED_BIOS_IMAGE}
+
+      # yamllint disable rule:line-length
+      - name: Create Versioned GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.release_tag.outputs.release_tag }}
+          name: "iPXE Images ${{ steps.release_tag.outputs.release_tag }}"
+          body: |
+            iPXE boot images built by GitHub Actions.
+
+            ## Images Included
+
+            - **ipxe-efi-${{ steps.release_tag.outputs.release_tag }}.img** - UEFI boot image
+            - **ipxe-bios-${{ steps.release_tag.outputs.release_tag }}.img** - BIOS boot image (USB)
+
+            ## Usage
+
+            These images are used for network booting OpenShift nodes in HotStack scenarios.
+
+            ### Download
+
+            ```bash
+            # Download UEFI boot image
+            curl -L -O https://github.com/${{ github.repository }}/releases/download/${{ steps.release_tag.outputs.release_tag }}/ipxe-efi-${{ steps.release_tag.outputs.release_tag }}.img
+
+            # Download BIOS boot image
+            curl -L -O https://github.com/${{ github.repository }}/releases/download/${{ steps.release_tag.outputs.release_tag }}/ipxe-bios-${{ steps.release_tag.outputs.release_tag }}.img
+            ```
+
+            ### Upload to Glance
+
+            See [iPXE README](https://github.com/${{ github.repository }}/blob/main/ipxe/README.md) for detailed upload instructions.
+          files: |
+            ${{ steps.release_tag.outputs.tagged_efi_image }}
+            ${{ steps.release_tag.outputs.tagged_bios_image }}
+      # yamllint enable rule:line-length
+
+      - name: Update 'latest-ipxe' Release Tag
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest-ipxe
+          name: "iPXE Images (Latest)"
+          prerelease: true
+          body: |
+            This is the latest iPXE images build. This release is automatically updated.
+
+            **Latest Build**: ${{ steps.release_tag.outputs.release_tag }}
+
+            ## Download
+
+            Use the static URLs for the latest build:
+
+            ```bash
+            # Download UEFI boot image
+            curl -L -O https://github.com/${{ github.repository }}/releases/download/latest-ipxe/ipxe-efi-latest.img
+
+            # Download BIOS boot image
+            curl -L -O https://github.com/${{ github.repository }}/releases/download/latest-ipxe/ipxe-bios-latest.img
+            ```
+
+            ## Upload to Glance
+
+            Upload the BIOS boot image for OCP nodes:
+
+            ```bash
+            openstack image create --disk-format=raw --file ipxe-bios-latest.img ipxe-boot-usb \
+              --property os_shutdown_timeout=5 \
+              --public
+            ```
+
+            Upload the UEFI rescue image:
+
+            ```bash
+            openstack image create --disk-format=raw --file ipxe-efi-latest.img ipxe-rescue-uefi \
+              --property os_shutdown_timeout=5 \
+              --property hw_firmware_type=uefi \
+              --property hw_machine_type=q35 \
+              --public
+            ```
+
+            Upload the BIOS rescue image:
+
+            ```bash
+            openstack image create --disk-format=raw --file ipxe-bios-latest.img ipxe-rescue-bios \
+              --property os_shutdown_timeout=5 \
+              --public
+            ```
+
+            For detailed documentation, see the [iPXE README](https://github.com/${{ github.repository }}/blob/main/ipxe/README.md).
+          files: |
+            ${{ steps.release_tag.outputs.tagged_efi_image }}
+            ${{ steps.release_tag.outputs.tagged_bios_image }}
+
+      - name: Upload Images with Static Filenames to Latest Release
+        run: |
+          echo "Creating static filename copies for easy downloading..."
+
+          # Copy the images with static names
+          cp ${{ steps.release_tag.outputs.tagged_efi_image }} ipxe-efi-latest.img
+          cp ${{ steps.release_tag.outputs.tagged_bios_image }} ipxe-bios-latest.img
+
+          echo "Uploading to latest-ipxe release with static filenames..."
+          # Upload to latest-ipxe release, replacing any existing files with the same names
+          gh release upload latest-ipxe ipxe-efi-latest.img --clobber --repo ${{ github.repository }}
+          gh release upload latest-ipxe ipxe-bios-latest.img --clobber --repo ${{ github.repository }}
+
+          echo "Static URLs available at:"
+          echo "https://github.com/${{ github.repository }}/releases/download/latest-ipxe/ipxe-efi-latest.img"
+          echo "https://github.com/${{ github.repository }}/releases/download/latest-ipxe/ipxe-bios-latest.img"
+        env:
+          GH_TOKEN: ${{ github.token }}

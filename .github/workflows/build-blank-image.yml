@@ -57,6 +57,7 @@ jobs:
           echo "Image renamed to: $TAGGED_IMAGE"
           ls -lh ${TAGGED_IMAGE}
 
+      # yamllint disable rule:line-length
       - name: 5. Create Versioned GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -75,10 +76,7 @@ jobs:
 
             ```bash
             # Download the image
-            REPO="${{ github.repository }}"
-            TAG="${{ steps.release_tag.outputs.release_tag }}"
-            FILE="${{ steps.release_tag.outputs.tagged_image }}"
-            curl -L -O "https://github.com/${REPO}/releases/download/${TAG}/${FILE}"
+            curl -L -O https://github.com/${{ github.repository }}/releases/download/${{ steps.release_tag.outputs.release_tag }}/${{ steps.release_tag.outputs.tagged_image }}
 
             # Upload to OpenStack Glance (qcow2 works for most deployments)
             openstack image create sushy-tools-blank-image \
@@ -101,6 +99,7 @@ jobs:
               --file blank-image.raw
             ```
           files: ${{ steps.release_tag.outputs.tagged_image }}
+      # yamllint enable rule:line-length
 
       - name: 6. Update 'latest-blank' Release Tag
         uses: softprops/action-gh-release@v2

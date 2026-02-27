@@ -5,57 +5,108 @@
 -->
 # IPXE image-building tools
 
-This Makefile automates the process of building customized iPXE images for
-different use cases, such as booting from USB, ISO, or EFI. The Makefile allows
-for custom configuration of iPXE by embedding a custom script (`script.ipxe`)
-and copying local configuration headers from `ipxe-config/` into the iPXE
-source directory.
+This directory contains tools for building customized iPXE images for network
+booting OpenShift nodes in HotStack scenarios.
 
-## Build dependencies
+## Download Pre-built Images (Recommended)
 
-To build the iPXE images, you need to install the following dependencies using
-`dnf`:
-
-- `gcc`
-- `xorriso`
-- `make`
-- `qemu-img`
-- `syslinux-nonlinux`
-- `xz-devel`
-- `guestfs-tools`
-- `perl`
-
-To install these dependencies, run the following command:
+Pre-built iPXE images are available from GitHub releases:
 
 ```bash
-sudo dnf install -y gcc xorriso make qemu-img syslinux-nonlinux xz-devel guestfs-tools perl
+# Download BIOS boot image
+curl -L -O https://github.com/openstack-k8s-operators/hotstack/releases/download/latest-ipxe/ipxe-bios-latest.img
+
+# Download UEFI boot image
+curl -L -O https://github.com/openstack-k8s-operators/hotstack/releases/download/latest-ipxe/ipxe-efi-latest.img
 ```
 
-## Variables
+For specific versions, see the [releases page](https://github.com/openstack-k8s-operators/hotstack/releases).
+
+## Uploading the iPXE Images to Glance
+
+1. Upload the USB boot image for OCP nodes:
+
+   Use `ipxe-boot-usb.raw` if built locally, or `ipxe-bios-latest.img` if downloaded.
+
+   ```shell
+   openstack image create --disk-format=raw --file ipxe-bios-latest.img ipxe-boot-usb \
+     --property os_shutdown_timeout=5 \
+     --public
+   ```
+
+2. Upload images for sushy-emulator rescue mode net-boot:
+
+   UEFI boot image (use `efi.img` if built locally, or `ipxe-efi-latest.img` if downloaded from GitHub):
+
+   ```shell
+   openstack image create --disk-format=raw --file ipxe-efi-latest.img ipxe-rescue-uefi \
+     --property os_shutdown_timeout=5 \
+     --property hw_firmware_type=uefi \
+     --property hw_machine_type=q35 \
+     --public
+   ```
+
+   BIOS boot image (use `ipxe-boot-usb.raw` if built locally, or `ipxe-bios-latest.img` if downloaded):
+
+   ```shell
+   openstack image create --disk-format=raw --file ipxe-bios-latest.img ipxe-rescue-bios \
+     --property os_shutdown_timeout=5 \
+     --public
+   ```
+
+## Building Images Locally
+
+The following sections describe how to build iPXE images locally using the
+included Makefile. The Makefile automates the process of building customized
+iPXE images for different use cases, such as booting from USB, ISO, or EFI. It
+allows for custom configuration of iPXE by embedding a custom script
+(`script.ipxe`) and copying local configuration headers from `ipxe-config/`
+into the iPXE source directory.
+
+### Build dependencies
+
+To build the iPXE images, you need to install the following dependencies:
+
+- `gcc` - For compiling iPXE
+- `make` - Build system
+- `perl` - Required by iPXE build scripts
+- `git` - To clone the iPXE repository
+- `guestfs-tools` (provides `virt-make-fs`) - For creating the EFI FAT filesystem image
+
+**On Fedora/RHEL/CentOS:**
+
+```bash
+sudo dnf install -y gcc make perl git guestfs-tools
+```
+
+**On Ubuntu/Debian:**
+
+```bash
+sudo apt-get install -y gcc make perl git libguestfs-tools
+```
+
+### Variables
 
 - `IPXE_SRCDIR`: The directory containing the iPXE source code.
-- `IPXE_ISO`, `IPXE_USB`, `IPXE_EFI`: The specific iPXE images to use as the
-  boot image for ISO, USB, and EFI formats, respectively.
-- `ipxe_iso_path`, `ipxe_usb_path`, `ipxe_efi_path`: The paths to the iPXE
-  images in the source directory.
+- `IPXE_USB`, `IPXE_EFI`: The specific iPXE images to use as the boot image for
+  USB and EFI formats.
+- `ipxe_usb_path`, `ipxe_efi_path`: The paths to the iPXE images in the source
+  directory.
 
-## Targets
+### Targets
 
-- `all`: The default target that builds all three formats (efi.img,
-  ipxe-boot.iso, and ipxe-boot-usb.raw).
+- `all`: The default target that builds both image formats (efi.img and
+  ipxe-boot-usb.raw).
 - `efi.img`: Creates an EFI image by copying the iPXE EFI binary to a FAT
   filesystem and creating a raw image.
-- `ipxe-boot.iso`: Creates an ISO image by extracting the contents of the iPXE
-  ISO, adding the EFI image, and creating a hybrid ISO image that can be booted
-  from both BIOS and UEFI.
 - `ipxe-boot-usb.raw`: Simply copies the iPXE USB image to a raw file.
 - `clean`: Removes all generated files and the iPXE source code directory.
 
-## Examples
+### Examples
 
-### Building the iPXE Images
+#### Building the iPXE Images
 
-1. Build the iPXE images:
+1. Build all iPXE images:
 
    ```shell
    make
@@ -65,39 +116,5 @@ sudo dnf install -y gcc xorriso make qemu-img syslinux-nonlinux xz-devel guestfs
 
    ```shell
    make efi.img
-   make ipxe-boot.iso
    make ipxe-boot-usb.raw
-   ```
-
-### Uploading the iPXE Images to Glance
-
-1. Upload the ISO image to Glance:
-
-   ```shell
-   openstack image create --disk-format=iso --file ipxe-boot.img ipxe-iso-image \
-     --property os_shutdown_timeout=5 \
-     --property hw_firmware_type=uefi \
-     --property hw_machine_type=q35
-   ```
-
-   ```shell
-   openstack image create --disk-format=raw --file ipxe-boot.img ipxe-rescue-uefi \
-     --property os_shutdown_timeout=5 \
-     --property hw_firmware_type=uefi \
-     --property hw_machine_type=q35 \
-     --tag hotstack
-   ```
-
-   ```shell
-   openstack image create --disk-format=raw --file ipxe-boot.img ipxe-rescue-bios \
-     --property os_shutdown_timeout=5 \
-     --tag hotstack
-   ```
-
-
-2. Upload the BIOS image to Glance:
-
-   ```shell
-   openstack image create --disk-format=raw --file ipxe-boot-usb.raw ipxe-boot-usb \
-     --property os_shutdown_timeout=5
    ```
