@@ -4,40 +4,19 @@ IPXE_SRCDIR=ipxe/src
 
 # The specific image to use as the iPXE boot image
 # Override this to use a different image
-IPXE_ISO=bin/ipxe.iso
 IPXE_USB=bin/ipxe.usb
 IPXE_EFI=bin-x86_64-efi/ipxe.efi
 
-ipxe_iso_path=$(IPXE_SRCDIR)/$(IPXE_ISO)
 ipxe_usb_path=$(IPXE_SRCDIR)/$(IPXE_USB)
 ipxe_efi_path=$(IPXE_SRCDIR)/$(IPXE_EFI)
 
-all: efi.img ipxe-boot.iso ipxe-boot-usb.raw
+all: efi.img ipxe-boot-usb.raw
 
 efi.img: $(ipxe_efi_path)
 	tmp_dir=$$(mktemp -d) && \
 	mkdir -p $$tmp_dir/EFI/BOOT && \
 	cp $(ipxe_efi_path) $$tmp_dir/EFI/BOOT/BOOTX64.EFI && \
 	virt-make-fs --format=raw --type=fat $$tmp_dir efi.img
-
-ipxe-boot.iso: $(ipxe_iso_path) efi.img
-	tmp_dir=$$(mktemp -d) && \
-	cp efi.img $$tmp_dir/efi.img && \
-	mkdir -p $$tmp_dir/boot/efi && \
-	xorriso -osirrox on -indev $(ipxe_iso_path) -extract / $$tmp_dir && \
-	xorriso -as mkisofs \
-		-isohybrid-mbr /usr/share/syslinux/isohdpfx.bin \
-		-c boot.catalog \
-		-b isolinux.bin \
-		-no-emul-boot \
-		-boot-load-size 4 \
-		-boot-info-table \
-		-eltorito-alt-boot \
-		-e efi.img \
-		-no-emul-boot \
-		-isohybrid-gpt-basdat \
-		-o ipxe-boot.img \
-		$$tmp_dir
 
 ipxe-boot-usb.raw: $(ipxe_usb_path)
 	cp $(ipxe_usb_path) ipxe-boot-usb.raw
@@ -75,9 +54,6 @@ $(IPXE_SRCDIR):
 # We disable -Werror so we can build older commits with newer gcc
 # Don't use parallel make, as this races to initialise config headers in a
 # clean repo.
-$(ipxe_iso_path): $(repo_config_headers) script.ipxe
-	$(MAKE) -C ipxe/src NO_WERROR=1 EMBED=../../script.ipxe $(IPXE_ISO)
-
 $(ipxe_efi_path): $(repo_config_headers) script.ipxe
 	$(MAKE) -C ipxe/src NO_WERROR=1 EMBED=../../script.ipxe $(IPXE_EFI)
 
@@ -86,4 +62,4 @@ $(ipxe_usb_path): $(repo_config_headers) script.ipxe
 
 clean:
 	rm -rf ipxe
-	rm -f ipxe-boot.img ipxe-boot.qcow2 ipxe-boot-usb.raw efi.img
+	rm -f ipxe-boot-usb.raw efi.img

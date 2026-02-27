@@ -20,7 +20,42 @@ deployments. The tasks are executed using the `make` utility.
 - **switch-host** (experimental): A CentOS 9 Stream image with libvirt/qemu for
   running virtual network switches using nested virtualization
 
-## Variables
+## Download Pre-built Images
+
+Pre-built images are available from GitHub releases. These are automatically built by CI workflows and can be downloaded instead of building locally.
+
+### Controller Image
+
+```bash
+# Download latest controller image
+curl -L -O https://github.com/openstack-k8s-operators/hotstack/releases/download/latest-controller/controller-latest.qcow2
+```
+
+### Blank Image
+
+```bash
+# Download latest blank image
+curl -L -O https://github.com/openstack-k8s-operators/hotstack/releases/download/latest-blank/blank-image-latest.qcow2
+```
+
+### NAT64 Appliance Image
+
+The NAT64 appliance image is built and released in the [openstack-k8s-operators-ci](https://github.com/openstack-k8s-operators/openstack-k8s-operators-ci) repository:
+
+```bash
+# Download latest NAT64 appliance image
+curl -L -O https://github.com/openstack-k8s-operators/openstack-k8s-operators-ci/releases/download/latest/nat64-appliance-latest.qcow2
+```
+
+For specific versions, see the respective releases pages:
+- [HotStack releases](https://github.com/openstack-k8s-operators/hotstack/releases) - Controller and blank images
+- [openstack-k8s-operators-ci releases](https://github.com/openstack-k8s-operators/openstack-k8s-operators-ci/releases) - NAT64 appliance image
+
+## Building Images Locally
+
+The following sections describe how to build images locally using the included Makefiles.
+
+### Variables
 
 - `CONTROLLER_IMAGE_NAME`: The name of the controller image file to be created
   (default: `controller.qcow2`).
@@ -56,7 +91,7 @@ deployments. The tasks are executed using the `make` utility.
 **Note**: Raw format is required for cloud backends using Ceph, as Ceph cannot
 directly use qcow2 images for VM disks.
 
-## Targets
+### Targets
 
 - `all`: The default target that depends on `controller`, `blank`, and `nat64`.
 - `clean`: A target that removes the controller, blank, and NAT64 images, as
@@ -99,15 +134,15 @@ directly use qcow2 images for VM disks.
     specified by `SWITCH_HOST_IMAGE_FORMAT` (in-place conversion if `raw`).
   - `switch-host_clean`: A target that removes the switch-host image file.
 
-## Examples
+### Examples
 
-### Cleanup
+#### Cleanup
 
 ```shell
 make clean
 ```
 
-### Building and uploading the controller image to glance
+#### Building and uploading the controller image to glance
 
 1. Build the controller image (using diskimage-builder):
 
@@ -136,7 +171,7 @@ make clean
      --file controller.qcow2
    ```
 
-### Building and uploading the blank image to glance
+#### Building and uploading the blank image to glance
 
 1. Create the blank image:
 
@@ -155,7 +190,7 @@ make clean
      --property os_shutdown_timeout=5
    ```
 
-### Building and uploading the NAT64 appliance image to glance
+#### Building and uploading the NAT64 appliance image to glance
 
 1. Build the NAT64 appliance image:
 
@@ -186,7 +221,7 @@ make clean
    environment is created at `~/test-python`. All of these can be cleaned up
    with `make nat64_clean`.
 
-### Building and uploading the switch-host image to glance
+#### Building and uploading the switch-host image to glance
 
 1. Build the switch-host image:
 
