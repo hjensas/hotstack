@@ -1,0 +1,164 @@
+---
+name: Build Blank Image
+
+"on":
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Release tag (e.g., v1.0.0)'
+        required: true
+
+jobs:
+  build-image:
+    runs-on: ubuntu-22.04
+
+    # Permission needed to create a release and upload assets
+    permissions:
+      contents: write
+
+    steps:
+      - name: 1. Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: 2. Install System Dependencies
+        run: |
+          echo "Installing system dependencies for image building..."
+          sudo apt-get update
+          sudo apt-get install -y \
+            qemu-utils \
+            make
+          echo "System dependencies installed"
+
+      - name: 3. Build Blank Image Using Makefile
+        run: |
+          echo "Building blank image using images/Makefile..."
+          cd images
+          make blank BLANK_IMAGE_FORMAT=qcow2
+          echo "Blank image built successfully"
+          ls -lh blank-image.qcow2
+          qemu-img info blank-image.qcow2
+          cd ..
+
+      - name: 4. Rename Image with Release Tag
+        id: release_tag
+        run: |
+          RELEASE_TAG="${{ inputs.release_tag }}"
+          echo "release_tag=$RELEASE_TAG" >> $GITHUB_OUTPUT
+          echo "Release tag: $RELEASE_TAG"
+
+          # Rename image to include the release tag
+          TAGGED_IMAGE="blank-image-${RELEASE_TAG}.qcow2"
+          cp images/blank-image.qcow2 ${TAGGED_IMAGE}
+
+          echo "tagged_image=$TAGGED_IMAGE" >> $GITHUB_OUTPUT
+          echo "Image renamed to: $TAGGED_IMAGE"
+          ls -lh ${TAGGED_IMAGE}
+
+      - name: 5. Create Versioned GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.release_tag.outputs.release_tag }}
+          name: "Blank Image ${{ steps.release_tag.outputs.release_tag }}"
+          body: |
+            HotStack Blank image built by GitHub Actions.
+
+            ## Image Details
+
+            - **Format**: qcow2
+            - **Size**: 1MB
+            - **Purpose**: Minimal blank disk image for virtual baremetal nodes with Redfish virtual BMC
+
+            ## Usage
+
+            ```bash
+            # Download the image
+            REPO="${{ github.repository }}"
+            TAG="${{ steps.release_tag.outputs.release_tag }}"
+            FILE="${{ steps.release_tag.outputs.tagged_image }}"
+            curl -L -O "https://github.com/${REPO}/releases/download/${TAG}/${FILE}"
+
+            # Upload to OpenStack Glance (qcow2 works for most deployments)
+            openstack image create sushy-tools-blank-image \
+              --disk-format qcow2 \
+              --container-format bare \
+              --property hw_firmware_type=uefi \
+              --property hw_machine_type=q35 \
+              --property os_shutdown_timeout=5 \
+              --file ${{ steps.release_tag.outputs.tagged_image }}
+
+            # If you need raw format (required for some Ceph RBD backends):
+            qemu-img convert -f qcow2 -O raw \
+              ${{ steps.release_tag.outputs.tagged_image }} blank-image.raw
+            openstack image create sushy-tools-blank-image \
+              --disk-format raw \
+              --container-format bare \
+              --property hw_firmware_type=uefi \
+              --property hw_machine_type=q35 \
+              --property os_shutdown_timeout=5 \
+              --file blank-image.raw
+            ```
+          files: ${{ steps.release_tag.outputs.tagged_image }}
+
+      - name: 6. Update 'latest' Release Tag
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: "Blank Image (Latest)"
+          prerelease: true
+          body: |
+            This is the latest Blank image build. This release is automatically updated.
+
+            **Latest Build**: ${{ steps.release_tag.outputs.release_tag }}
+
+            ## Download
+
+            Use the static URL for the latest build:
+            ```bash
+            curl -L -O https://github.com/${{ github.repository }}/releases/download/latest/blank-image-latest.qcow2
+            ```
+
+            Or download a specific version from the [releases page](https://github.com/${{ github.repository }}/releases)
+            to pin your setup to a known-good build.
+
+            ## Usage
+
+            ```bash
+            # Upload to OpenStack Glance (qcow2 works for most deployments)
+            openstack image create sushy-tools-blank-image \
+              --disk-format qcow2 \
+              --container-format bare \
+              --property hw_firmware_type=uefi \
+              --property hw_machine_type=q35 \
+              --property os_shutdown_timeout=5 \
+              --file blank-image-latest.qcow2
+
+            # If you need raw format (required for some Ceph RBD backends):
+            qemu-img convert -f qcow2 -O raw blank-image-latest.qcow2 blank-image.raw
+            openstack image create sushy-tools-blank-image \
+              --disk-format raw \
+              --container-format bare \
+              --property hw_firmware_type=uefi \
+              --property hw_machine_type=q35 \
+              --property os_shutdown_timeout=5 \
+              --file blank-image.raw
+            ```
+          files: ${{ steps.release_tag.outputs.tagged_image }}
+
+      - name: 7. Upload Image with Static Filename to Latest Release
+        run: |
+          echo "Creating static filename copy for easy downloading..."
+
+          # Copy the image with a static name
+          cp ${{ steps.release_tag.outputs.tagged_image }} blank-image-latest.qcow2
+
+          echo "Uploading to latest release with static filename..."
+          # Upload to latest release, replacing any existing file with the same name
+          gh release upload latest blank-image-latest.qcow2 --clobber --repo ${{ github.repository }}
+
+          echo "Static URL available at:"
+          echo "https://github.com/${{ github.repository }}/releases/download/latest/blank-image-latest.qcow2"
+        env:
+          GH_TOKEN: ${{ github.token }}

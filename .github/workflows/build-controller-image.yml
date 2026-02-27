@@ -1,0 +1,159 @@
+---
+name: Build HotStack Controller Image
+
+"on":
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Release tag (e.g., v1.0.0)'
+        required: true
+
+jobs:
+  build-image:
+    runs-on: ubuntu-22.04
+
+    # Permission needed to create a release and upload assets
+    permissions:
+      contents: write
+
+    steps:
+      - name: 1. Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: 2. Install System Dependencies
+        run: |
+          echo "Installing system dependencies for image building..."
+          sudo apt-get update
+          sudo apt-get install -y \
+            qemu-utils \
+            libguestfs-tools \
+            curl \
+            make
+          echo "System dependencies installed"
+
+      - name: 3. Build Controller Image Using Makefile
+        run: |
+          echo "Building controller image using images/Makefile..."
+          cd images
+          make controller CONTROLLER_IMAGE_FORMAT=qcow2
+          echo "Controller image built successfully"
+          ls -lh controller.qcow2
+          qemu-img info controller.qcow2
+          cd ..
+        env:
+          LIBGUESTFS_BACKEND: direct
+
+      - name: 4. Rename Image with Release Tag
+        id: release_tag
+        run: |
+          RELEASE_TAG="${{ inputs.release_tag }}"
+          echo "release_tag=$RELEASE_TAG" >> $GITHUB_OUTPUT
+          echo "Release tag: $RELEASE_TAG"
+
+          # Rename image to include the release tag
+          TAGGED_IMAGE="controller-${RELEASE_TAG}.qcow2"
+          cp images/controller.qcow2 ${TAGGED_IMAGE}
+
+          echo "tagged_image=$TAGGED_IMAGE" >> $GITHUB_OUTPUT
+          echo "Image renamed to: $TAGGED_IMAGE"
+          ls -lh ${TAGGED_IMAGE}
+
+      - name: 5. Create Versioned GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.release_tag.outputs.release_tag }}
+          name: "Controller Image ${{ steps.release_tag.outputs.release_tag }}"
+          body: |
+            HotStack Controller image built by GitHub Actions.
+
+            ## Image Details
+
+            - **Base**: CentOS Stream 9 (latest)
+            - **Format**: qcow2
+            - **Packages**: git, dnsmasq, vim-enhanced, tmux, bind-utils, httpd,
+              httpd-tools, podman, butane, bash-completion, haproxy, nmstate,
+              tcpdump, make, nfs-utils
+            - **Timezone**: UTC
+
+            ## Usage
+
+            ```bash
+            # Download the image
+            REPO="${{ github.repository }}"
+            TAG="${{ steps.release_tag.outputs.release_tag }}"
+            FILE="${{ steps.release_tag.outputs.tagged_image }}"
+            curl -L -O "https://github.com/${REPO}/releases/download/${TAG}/${FILE}"
+
+            # Upload to OpenStack Glance (qcow2 works for most deployments)
+            openstack image create hotstack-controller \
+              --disk-format qcow2 \
+              --container-format bare \
+              --file ${{ steps.release_tag.outputs.tagged_image }}
+
+            # If you need raw format (required for some Ceph RBD backends):
+            qemu-img convert -f qcow2 -O raw \
+              ${{ steps.release_tag.outputs.tagged_image }} controller.raw
+            openstack image create hotstack-controller \
+              --disk-format raw \
+              --container-format bare \
+              --file controller.raw
+            ```
+          files: ${{ steps.release_tag.outputs.tagged_image }}
+
+      - name: 6. Update 'latest' Release Tag
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: "Controller Image (Latest)"
+          prerelease: true
+          body: |
+            This is the latest Controller image build. This release is automatically updated.
+
+            **Latest Build**: ${{ steps.release_tag.outputs.release_tag }}
+
+            ## Download
+
+            Use the static URL for the latest build:
+            ```bash
+            curl -L -O https://github.com/${{ github.repository }}/releases/download/latest/controller-latest.qcow2
+            ```
+
+            Or download a specific version from the [releases page](https://github.com/${{ github.repository }}/releases)
+            to pin your setup to a known-good build.
+
+            ## Usage
+
+            ```bash
+            # Upload to OpenStack Glance (qcow2 works for most deployments)
+            openstack image create hotstack-controller \
+              --disk-format qcow2 \
+              --container-format bare \
+              --file controller-latest.qcow2
+
+            # If you need raw format (required for some Ceph RBD backends):
+            qemu-img convert -f qcow2 -O raw controller-latest.qcow2 controller.raw
+            openstack image create hotstack-controller \
+              --disk-format raw \
+              --container-format bare \
+              --file controller.raw
+            ```
+          files: ${{ steps.release_tag.outputs.tagged_image }}
+
+      - name: 7. Upload Image with Static Filename to Latest Release
+        run: |
+          echo "Creating static filename copy for easy downloading..."
+
+          # Copy the image with a static name
+          cp ${{ steps.release_tag.outputs.tagged_image }} controller-latest.qcow2
+
+          echo "Uploading to latest release with static filename..."
+          # Upload to latest release, replacing any existing file with the same name
+          gh release upload latest controller-latest.qcow2 --clobber --repo ${{ github.repository }}
+
+          echo "Static URL available at:"
+          echo "https://github.com/${{ github.repository }}/releases/download/latest/controller-latest.qcow2"
+        env:
+          GH_TOKEN: ${{ github.token }}
