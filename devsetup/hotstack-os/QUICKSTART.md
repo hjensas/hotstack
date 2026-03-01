@@ -21,8 +21,7 @@ sudo make setup
 
 This performs complete host setup:
 - Installs required packages (`openvswitch`, `libvirt`, `nfs-utils`, etc.)
-- Starts required services (`openvswitch`, `libvirt`, `nfs-server`)
-- Loads kernel modules (`kvm_intel`/`kvm_amd`, `openvswitch`)
+- Enables and starts required services (`openvswitch`, `libvirt`, `nfs-server`)
 - Verifies KVM support (`/dev/kvm` exists)
 - Creates system directories for Nova instances with proper ownership
 - Sets up NFS server for Cinder volumes (exported to localhost)
