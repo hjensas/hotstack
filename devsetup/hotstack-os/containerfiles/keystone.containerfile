@@ -27,8 +27,8 @@ RUN mkdir -p /etc/keystone /etc/keystone/fernet-keys /etc/keystone/credential-ke
 COPY --chown=openstack:openstack configs/keystone-uwsgi.ini /etc/keystone/keystone-uwsgi.ini
 
 # Copy scripts with permissions
-COPY --chmod=644 scripts/common.sh /usr/local/lib/common.sh
 COPY --chmod=755 scripts/keystone-entrypoint.sh /usr/local/bin/entrypoint.sh
+COPY --chmod=755 scripts/keystone-healthcheck.sh /usr/local/bin/keystone-healthcheck.sh
 
 EXPOSE 5000
 

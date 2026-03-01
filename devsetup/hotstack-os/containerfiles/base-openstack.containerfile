@@ -53,6 +53,7 @@ RUN apt-get update && \
         iputils-ping \
         default-mysql-client \
         libjemalloc2 \
+        procps \
     && rm -rf /var/lib/apt/lists/*
 
 # Use jemalloc for better memory management
@@ -64,3 +65,6 @@ RUN (groupadd -r openstack || true) && \
 
 # Create /opt directory for OpenStack services
 RUN mkdir -p /opt
+
+# Copy common helper functions used by all OpenStack service entrypoints
+COPY --chmod=644 scripts/common.sh /usr/local/lib/common.sh

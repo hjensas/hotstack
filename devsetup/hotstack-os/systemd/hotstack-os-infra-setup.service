@@ -1,0 +1,39 @@
+# Copyright Red Hat, Inc.
+# All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License"); you may
+# not use this file except in compliance with the License. You may obtain
+# a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+# WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+# License for the specific language governing permissions and limitations
+# under the License.
+
+[Unit]
+Description=HotStack-OS Infrastructure Setup
+Documentation=https://github.com/openstack-k8s-operators/hotstack
+After=openvswitch.service nfs-server.service network-online.target
+Wants=network-online.target
+Requires=openvswitch.service nfs-server.service
+PartOf=hotstack-os.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/bin/hotstack-os-infra-setup.sh
+ExecStop=/usr/local/bin/hotstack-os-infra-cleanup.sh
+StandardOutput=journal
+StandardError=journal
+# Environment variables are set here during 'make install'
+# To change configuration, edit .env and re-run 'sudo make install'
+Environment=BREX_IP=__BREX_IP__
+Environment=PROVIDER_NETWORK=__PROVIDER_NETWORK__
+Environment=CONTAINER_NETWORK=__CONTAINER_NETWORK__
+Environment=CINDER_NFS_EXPORT_DIR=__CINDER_NFS_EXPORT_DIR__
+
+[Install]
+WantedBy=multi-user.target

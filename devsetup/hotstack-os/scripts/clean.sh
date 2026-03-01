@@ -81,4 +81,4 @@ echo -n "Removing firewall zones... "
 remove_firewall_zones 2>/dev/null && echo -e "${GREEN}✓${NC}" || echo -e "${YELLOW}⚠${NC}"
 
 echo ""
-echo -e "${GREEN}Complete!${NC} To rebuild: make setup && make build && make start"
+echo -e "${GREEN}Complete!${NC} To rebuild: sudo make build && sudo make setup && sudo make start"

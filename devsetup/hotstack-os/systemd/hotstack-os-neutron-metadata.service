@@ -1,0 +1,56 @@
+# Copyright Red Hat, Inc.
+# All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License"); you may
+# not use this file except in compliance with the License. You may obtain
+# a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+# WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+# License for the specific language governing permissions and limitations
+# under the License.
+
+[Unit]
+Description=HotStack-OS Neutron Metadata Agent Service
+Documentation=https://github.com/openstack-k8s-operators/hotstack
+After=hotstack-os-neutron-server.service hotstack-os-ovn-controller.service
+Requires=hotstack-os-neutron-server.service hotstack-os-ovn-controller.service
+PartOf=hotstack-os.target
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=10
+
+ExecStartPre=-/usr/bin/podman rm -f hotstack-os-neutron-metadata
+ExecStart=/usr/bin/podman run \
+    --pull=never \
+    --name hotstack-os-neutron-metadata \
+    --hostname neutron-metadata \
+    --privileged \
+    --network host \
+    --user root \
+    --env NEUTRON_DB_PASSWORD=__DB_PASSWORD__ \
+    --env SERVICE_PASSWORD=__SERVICE_PASSWORD__ \
+    --env METADATA_SECRET=__SERVICE_PASSWORD__ \
+    --env NEUTRON_URL=http://__NEUTRON_SERVER_IP__:9696/ \
+    --env OVN_SB_IP=__OVN_NORTHD_IP__ \
+    --volume __HOTSTACK_DATA_DIR__/runtime/config/neutron/neutron.conf:/etc/neutron/neutron.conf:ro,z \
+    --volume __HOTSTACK_DATA_DIR__/runtime/config/neutron/neutron_ovn_metadata_agent.ini:/etc/neutron/neutron_ovn_metadata_agent.ini:ro,z \
+    --volume /run/openvswitch:/run/openvswitch \
+    --entrypoint /usr/local/bin/neutron-ovn-metadata-agent-entrypoint.sh \
+    localhost/hotstack-os-neutron:latest
+
+# Health check: CONTAINER INTERVAL TIMEOUT RETRIES START_PERIOD COMMAND
+ExecStartPost=/usr/local/bin/hotstack-healthcheck.sh hotstack-os-neutron-metadata 10 5 5 20 test -f /proc/1/exe
+ExecStop=/usr/bin/podman stop -t 10 hotstack-os-neutron-metadata
+ExecStopPost=-/usr/bin/podman rm -f hotstack-os-neutron-metadata
+
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=hotstack-os.target

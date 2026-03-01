@@ -1,0 +1,68 @@
+# Copyright Red Hat, Inc.
+# All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License"); you may
+# not use this file except in compliance with the License. You may obtain
+# a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+# WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+# License for the specific language governing permissions and limitations
+# under the License.
+
+[Unit]
+Description=HotStack-OS Nova Compute Service
+Documentation=https://github.com/openstack-k8s-operators/hotstack
+After=hotstack-os-nova-api.service hotstack-os-nova-conductor.service hotstack-os-neutron-server.service
+Requires=hotstack-os-nova-api.service hotstack-os-nova-conductor.service hotstack-os-neutron-server.service
+PartOf=hotstack-os.target
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=10
+TimeoutStartSec=120
+
+ExecStartPre=-/usr/bin/podman rm -f hotstack-os-nova-compute
+ExecStart=/usr/bin/podman run \
+    --pull=never \
+    --name hotstack-os-nova-compute \
+    --hostname nova-compute \
+    --privileged \
+    --network host \
+    --user root \
+    --security-opt label=type:spc_t \
+    --add-host hotstack-os-mariadb:__MARIADB_IP__ \
+    --add-host hotstack-os-rabbitmq:__RABBITMQ_IP__ \
+    --add-host hotstack-os-memcached:__MEMCACHED_IP__ \
+    --env NOVA_DB_PASSWORD=__DB_PASSWORD__ \
+    --env SERVICE_PASSWORD=__SERVICE_PASSWORD__ \
+    --env RABBITMQ_USER=__RABBITMQ_DEFAULT_USER__ \
+    --env RABBITMQ_PASS=__RABBITMQ_DEFAULT_PASS__ \
+    --env REGION_NAME=__REGION_NAME__ \
+    --env METADATA_SECRET=__SERVICE_PASSWORD__ \
+    --volume __HOTSTACK_DATA_DIR__/runtime/config/nova/nova.conf:/etc/nova/nova.conf:ro,z \
+    --volume /var/run/libvirt:/var/run/libvirt \
+    --volume /etc/iscsi:/etc/iscsi:z \
+    --volume /var/lib/iscsi:/var/lib/iscsi:z \
+    --volume /run/openvswitch:/run/openvswitch \
+    --volume __HOTSTACK_DATA_DIR__/nova:/var/lib/nova:z \
+    --volume __NOVA_INSTANCES_PATH__:__NOVA_INSTANCES_PATH__:shared \
+    --volume __NOVA_NFS_MOUNT_POINT_BASE__:__NOVA_NFS_MOUNT_POINT_BASE__:shared \
+    --volume /sys/fs/cgroup:/sys/fs/cgroup:ro \
+    --entrypoint /usr/local/bin/nova-compute-entrypoint.sh \
+    localhost/hotstack-os-nova:latest
+
+# Health check: CONTAINER INTERVAL TIMEOUT RETRIES START_PERIOD COMMAND
+ExecStartPost=/usr/local/bin/hotstack-healthcheck.sh hotstack-os-nova-compute 10 5 5 30 /usr/local/bin/nova-compute-healthcheck.sh
+ExecStop=/usr/bin/podman stop -t 10 hotstack-os-nova-compute
+ExecStopPost=-/usr/bin/podman rm -f hotstack-os-nova-compute
+
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=hotstack-os.target

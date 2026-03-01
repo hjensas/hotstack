@@ -1,29 +1,30 @@
 # HotStack-OS - Containerized OpenStack for HotStack Development
 
-A minimal containerized OpenStack deployment using podman-compose, designed for running HotStack scenarios on developer workstations.
+A minimal containerized OpenStack deployment designed for running HotStack scenarios on developer workstations, managed via systemd for production-like service management.
 
 ## Features
 
-- **Fast setup**: ~10 minutes from zero to working OpenStack (first-time build), ~3 minutes for subsequent starts
+- **Fast setup**: ~10 minutes from zero to working OpenStack (first-time build)
 - **Self-contained**: All services in containers with file-backed storage
 - **Host integration**: Uses host libvirt (KVM), OpenvSwitch, and NFS
 - **HotStack-ready**: Supports Heat orchestration, trunk ports, VLANs, boot from volume, NoVNC console, and serial console logging
 - **Minimal dependencies**: Requires libvirt, OpenvSwitch, podman, NFS server, and nmap-ncat on host
+- **Production-like**: systemd service management with ordering, health checks, and automatic restart
 
 > ⚠️ **Security Warning**: This environment uses default passwords, no encryption, and minimal access controls. It is intended ONLY for development and testing on trusted private networks.
 
 ## Quick Start
 
-See **[QUICKSTART.md](QUICKSTART.md)** for detailed step-by-step instructions.
+See **[INSTALL.md](INSTALL.md)** for detailed installation guide.
 
 **TL;DR**:
 ```bash
-sudo make install-client # Install OpenStack client packages
-sudo make setup          # Verify host prerequisites and setup NFS
-sudo make build          # Build container images (~5 min)
-sudo make start          # Prepare configs and start all services
-sudo make status         # Check service status
-make post-setup          # Create hotstack project/user, resources, and download/upload images (no sudo required)
+sudo make install-deps                          # Install system dependencies (packages and services)
+sudo make build                                 # Build container images (~8 min)
+sudo make install                               # Install systemd services (includes config)
+sudo systemctl enable --now hotstack-os.target  # Enable and start services
+sudo make status                                # Check services are starting/running
+make post-setup                                 # Create hotstack project/user, resources, and images (no sudo required)
 ```
 
 Then set `export OS_CLOUD=hotstack-os` for regular user access or `export OS_CLOUD=hotstack-os-admin` for admin access and run `openstack` commands.
@@ -60,22 +61,46 @@ HotStack-OS is designed to coexist safely with other podman containers and workl
 ## Management Commands
 
 ```bash
-sudo make setup           # Verify host prerequisites
+# Setup and build
+sudo make install-deps    # Install system dependencies (packages and services)
 sudo make install-client  # Install OpenStack client packages on host
 sudo make build           # Build all container images
-sudo make config          # Prepare runtime configuration files (automatically run by 'make start')
-sudo make start           # Start all services (includes config preparation)
-sudo make stop            # Stop all services
-sudo make restart         # Restart all services
-sudo make status          # Check status of all services
-make post-setup           # Create hotstack project/user, resources, and download/upload images (no sudo required)
-sudo make logs            # View logs from all services
+sudo make install         # Install systemd services (includes config)
+sudo make uninstall       # Uninstall systemd services
+
+# Post-installation
+make post-setup           # Create hotstack project/user, resources, and images (no sudo required)
+make smoke-test           # Run smoke tests to validate deployment (no sudo required)
+
+# Verification
+export OS_CLOUD=hotstack-os-admin                # Use admin credentials
+openstack service list                           # List all OpenStack services
+openstack endpoint list                          # List all API endpoints
+export OS_CLOUD=hotstack-os                      # Switch to regular user (after post-setup)
+openstack network list                           # List available networks
+openstack image list                             # List available images
+
+# Service management (use systemctl)
+sudo systemctl enable hotstack-os.target       # Enable automatic startup on boot
+sudo systemctl start hotstack-os.target        # Start all services
+sudo systemctl stop hotstack-os.target         # Stop all services
+sudo systemctl restart hotstack-os.target      # Restart all services
+systemctl list-units 'hotstack-os*'            # List all services and their status
+systemctl --failed 'hotstack-os*'              # Show only failed services
+sudo systemctl status hotstack-os.target       # Check detailed status
+sudo journalctl -u 'hotstack-os*' -f           # View logs from all services
+
+# Cleanup
 sudo make clean           # Complete reset (WARNING: destroys ALL libvirt VMs with pattern 'notapet-<uuid>')
 ```
 
-## Troubleshooting
+## Documentation
 
-See **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)** for common problems and solutions.
+- **[INSTALL.md](INSTALL.md)** - Complete installation guide
+- **[ARCHITECTURE.md](ARCHITECTURE.md)** - Architecture and design details
+- **[CONFIGURATION.md](CONFIGURATION.md)** - Configuration options
+- **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)** - Common problems and solutions
+- **[SMOKE_TEST.md](SMOKE_TEST.md)** - Validation tests
 
 ## License
 

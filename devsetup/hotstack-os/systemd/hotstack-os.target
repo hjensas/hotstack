@@ -1,0 +1,66 @@
+# Copyright Red Hat, Inc.
+# All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License"); you may
+# not use this file except in compliance with the License. You may obtain
+# a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+# WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+# License for the specific language governing permissions and limitations
+# under the License.
+
+[Unit]
+Description=HotStack-OS OpenStack Development Environment
+Documentation=https://github.com/openstack-k8s-operators/hotstack
+After=network-online.target openvswitch.service nfs-server.service
+Wants=network-online.target
+
+# Infrastructure setup (oneshot)
+Wants=hotstack-os-infra-setup.service
+
+# Infrastructure services
+Wants=hotstack-os-dnsmasq.service
+Wants=hotstack-os-haproxy.service
+Wants=hotstack-os-mariadb.service
+Wants=hotstack-os-rabbitmq.service
+Wants=hotstack-os-memcached.service
+
+# Identity service
+Wants=hotstack-os-keystone.service
+
+# Image service
+Wants=hotstack-os-glance.service
+
+# Placement service
+Wants=hotstack-os-placement.service
+
+# OVN services
+Wants=hotstack-os-ovn-northd.service
+Wants=hotstack-os-ovn-controller.service
+
+# Neutron services
+Wants=hotstack-os-neutron-server.service
+Wants=hotstack-os-neutron-metadata.service
+
+# Nova services
+Wants=hotstack-os-nova-api.service
+Wants=hotstack-os-nova-conductor.service
+Wants=hotstack-os-nova-scheduler.service
+Wants=hotstack-os-nova-compute.service
+Wants=hotstack-os-nova-novncproxy.service
+
+# Cinder services
+Wants=hotstack-os-cinder-api.service
+Wants=hotstack-os-cinder-scheduler.service
+Wants=hotstack-os-cinder-volume.service
+
+# Heat services
+Wants=hotstack-os-heat-api.service
+Wants=hotstack-os-heat-engine.service
+
+[Install]
+WantedBy=multi-user.target

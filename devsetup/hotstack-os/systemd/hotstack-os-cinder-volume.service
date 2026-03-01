@@ -1,0 +1,59 @@
+# Copyright Red Hat, Inc.
+# All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License"); you may
+# not use this file except in compliance with the License. You may obtain
+# a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+# WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+# License for the specific language governing permissions and limitations
+# under the License.
+
+[Unit]
+Description=HotStack-OS Cinder Volume Service
+Documentation=https://github.com/openstack-k8s-operators/hotstack
+After=hotstack-os-cinder-api.service hotstack-os-cinder-scheduler.service
+Requires=hotstack-os-cinder-api.service hotstack-os-cinder-scheduler.service
+PartOf=hotstack-os.target
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=10
+
+ExecStartPre=-/usr/bin/podman rm -f hotstack-os-cinder-volume
+ExecStart=/usr/bin/podman run \
+    --pull=never \
+    --name hotstack-os-cinder-volume \
+    --hostname cinder-volume \
+    --privileged \
+    --network host \
+    --user root \
+    --add-host hotstack-os-mariadb:__MARIADB_IP__ \
+    --add-host hotstack-os-rabbitmq:__RABBITMQ_IP__ \
+    --add-host hotstack-os-memcached:__MEMCACHED_IP__ \
+    --env CINDER_DB_PASSWORD=__DB_PASSWORD__ \
+    --env SERVICE_PASSWORD=__SERVICE_PASSWORD__ \
+    --env RABBITMQ_USER=__RABBITMQ_DEFAULT_USER__ \
+    --env RABBITMQ_PASS=__RABBITMQ_DEFAULT_PASS__ \
+    --env REGION_NAME=__REGION_NAME__ \
+    --volume __HOTSTACK_DATA_DIR__/runtime/config/cinder/cinder.conf:/etc/cinder/cinder.conf:ro,z \
+    --volume __HOTSTACK_DATA_DIR__/runtime/config/cinder/nfs_shares:/etc/cinder/nfs_shares:ro,z \
+    --volume __HOTSTACK_DATA_DIR__/cinder:/var/lib/cinder:z \
+    --entrypoint /usr/local/bin/cinder-volume-entrypoint.sh \
+    localhost/hotstack-os-cinder:latest
+
+# Health check: CONTAINER INTERVAL TIMEOUT RETRIES START_PERIOD COMMAND
+ExecStartPost=/usr/local/bin/hotstack-healthcheck.sh hotstack-os-cinder-volume 10 5 5 20 sh -c "cinder-volume --version 2>/dev/null || test -f /proc/1/exe"
+ExecStop=/usr/bin/podman stop -t 10 hotstack-os-cinder-volume
+ExecStopPost=-/usr/bin/podman rm -f hotstack-os-cinder-volume
+
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=hotstack-os.target

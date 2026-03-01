@@ -14,7 +14,8 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-# Setup and configure host prerequisites for hotstack-os
+# Setup host configuration for podman-compose deployment
+# Note: This script assumes dependencies are already installed via install-deps.sh
 
 set -e
 
@@ -24,38 +25,13 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/common.sh"
 
-echo "=== HotStack-OS Host Setup ==="
+echo "=== HotStack-OS Host Setup (podman-compose) ==="
 
 # Check for root privileges
 require_root
 
 # Load .env configuration
 load_env_file
-
-# Install required packages
-echo "Installing required packages..."
-
-# Setup required repositories (CentOS only)
-if is_centos; then
-    echo "Setting up required repositories..."
-    setup_epel_repository
-    setup_nfv_repository
-fi
-
-check_and_queue_package "libvirt"
-check_and_queue_package "qemu-kvm"
-check_and_queue_package "podman"
-check_and_queue_package "podman-compose"
-check_and_queue_package "make"
-check_and_queue_package "nmap-ncat"
-check_and_queue_package "nfs-utils"
-if is_centos; then
-    check_and_queue_package "openvswitch3.5"
-else
-    check_and_queue_package "openvswitch"
-fi
-
-install_queued_packages
 
 # Check for network subnet conflicts
 echo -n "Checking network availability... "
@@ -71,25 +47,15 @@ else
     echo -e "${GREEN}✓${NC}"
 fi
 
-# Enable and start required services
-echo "Configuring required services..."
-
-# Setup libvirt services
-setup_libvirt_services || exit 1
-verify_libvirt || exit 1
-
-# Setup OpenvSwitch service
-setup_openvswitch_service || exit 1
-
-# Setup NFS server for Cinder
-setup_nfs_server || exit 1
-
 # Setup network infrastructure
 add_ovs_bridges || exit 1
 
-# Setup firewall zones and /etc/hosts entries
+# Setup firewall zones and host records
 add_firewall_zones || exit 1
 add_hosts_entries || exit 1
+
+# Setup NFS exports for Cinder
+setup_nfs_exports || exit 1
 
 # Create system directories for Nova and Cinder
 echo "Setting up system directories..."
@@ -111,4 +77,11 @@ if command -v semanage >/dev/null 2>&1; then
     semanage fcontext -a -t virt_var_lib_t "$NOVA_NFS_MOUNT_POINT_BASE(/.*)?" 2>/dev/null || true
     restorecon -R "$NOVA_NFS_MOUNT_POINT_BASE" 2>/dev/null || true
 fi
-echo -e "${GREEN}✓ Host setup complete!${NC} Next: make build && make start"
+echo ""
+echo "========================================"
+echo "Host setup complete!"
+echo "========================================"
+echo ""
+echo "Next steps:"
+echo "  1. Start services: sudo make start"
+echo ""

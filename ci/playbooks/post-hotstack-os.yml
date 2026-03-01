@@ -4,6 +4,7 @@
   vars:
     hotstack_os_dir: "{{ ansible_user_dir }}/{{ zuul.project.src_dir }}/devsetup/hotstack-os"
     log_dir: "{{ ansible_user_dir }}/zuul-output/logs"
+    hotstack_deployment_method: "{{ deployment_method | default('podman-compose') }}"
   tasks:
 
     - name: Collect container logs
@@ -41,6 +42,68 @@
         - name: Log journal collection failure
           ansible.builtin.debug:
             msg: "WARNING: Journal log collection failed, continuing..."
+
+    - name: Collect systemd service status and logs
+      when: hotstack_deployment_method == 'systemd'
+      block:
+        - name: Create systemd log directory
+          ansible.builtin.file:
+            path: "{{ log_dir }}/systemd"
+            state: directory
+            mode: '0755'
+
+        - name: Collect systemd unit status
+          become: true
+          ansible.builtin.shell: |
+            systemctl list-units 'hotstack-os*' --all --no-pager > {{ log_dir }}/systemd/unit-list.log 2>&1
+          failed_when: false
+
+        - name: Collect systemd target status
+          become: true
+          ansible.builtin.shell: |
+            systemctl status hotstack-os.target --no-pager -l > {{ log_dir }}/systemd/target-status.log 2>&1
+          failed_when: false
+
+        - name: Get list of hotstack-os systemd services
+          become: true
+          args:
+            executable: /bin/bash
+          ansible.builtin.shell: |
+            set -o pipefail
+            systemctl list-units 'hotstack-os-*.service' --all --no-pager --no-legend | awk '{print $1}'
+          register: systemd_services
+          failed_when: false
+
+        - name: Collect individual service status
+          become: true
+          ansible.builtin.shell: |
+            systemctl status {{ item }} --no-pager -l > {{ log_dir }}/systemd/{{ item }}-status.log 2>&1
+          loop: "{{ systemd_services.stdout_lines }}"
+          failed_when: false
+
+        - name: Collect individual service journal logs
+          become: true
+          ansible.builtin.shell: |
+            journalctl -u {{ item }} --no-pager > {{ log_dir }}/systemd/{{ item }}-journal.log 2>&1
+          loop: "{{ systemd_services.stdout_lines }}"
+          failed_when: false
+
+        - name: Copy installed systemd unit files
+          become: true
+          ansible.builtin.shell: |
+            cp /etc/systemd/system/hotstack-os*.service {{ log_dir }}/systemd/ 2>&1 || true
+            cp /etc/systemd/system/hotstack-os.target {{ log_dir }}/systemd/ 2>&1 || true
+          failed_when: false
+
+        - name: Copy systemd helper scripts
+          become: true
+          ansible.builtin.shell: |
+            cp /usr/local/bin/hotstack-healthcheck.sh {{ log_dir }}/systemd/ 2>&1 || true
+          failed_when: false
+      rescue:
+        - name: Log systemd collection failure
+          ansible.builtin.debug:
+            msg: "WARNING: Systemd log collection failed, continuing..."
 
     - name: Collect podman status
       block:

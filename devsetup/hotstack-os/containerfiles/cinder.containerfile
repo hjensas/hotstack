@@ -48,7 +48,6 @@ RUN mkdir -p /var/lib/cinder /var/lock/cinder /etc/cinder/rootwrap.d && \
     chmod 0440 /etc/sudoers.d/cinder-rootwrap
 
 # Copy entrypoint scripts with permissions
-COPY --chmod=644 scripts/common.sh /usr/local/lib/common.sh
 COPY --chmod=755 scripts/cinder-api-entrypoint.sh /usr/local/bin/cinder-api-entrypoint.sh
 COPY --chmod=755 scripts/cinder-scheduler-entrypoint.sh /usr/local/bin/cinder-scheduler-entrypoint.sh
 COPY --chmod=755 scripts/cinder-volume-entrypoint.sh /usr/local/bin/cinder-volume-entrypoint.sh
