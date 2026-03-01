@@ -57,11 +57,6 @@ fi
 
 install_queued_packages
 
-# Load kernel modules
-echo "Loading kernel modules..."
-load_kvm_module || exit 1
-load_ovs_module || exit 1
-
 # Check for network subnet conflicts
 echo -n "Checking network availability... "
 SUBNET_IN_USE=0

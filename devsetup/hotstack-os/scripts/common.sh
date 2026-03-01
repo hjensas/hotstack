@@ -320,66 +320,6 @@ wait_for_container() {
 }
 
 # ============================================================================
-# Kernel Module Functions
-# ============================================================================
-
-# Load KVM kernel module (Intel or AMD)
-# Usage: load_kvm_module
-# Returns: 0 on success, 1 on failure
-load_kvm_module() {
-    if lsmod | grep -q "^kvm_intel"; then
-        echo -e "${GREEN}✓${NC} Kernel module kvm_intel is already loaded"
-        return 0
-    elif lsmod | grep -q "^kvm_amd"; then
-        echo -e "${GREEN}✓${NC} Kernel module kvm_amd is already loaded"
-        return 0
-    else
-        # Try to detect CPU vendor and load appropriate module
-        if grep -q "vendor_id.*GenuineIntel" /proc/cpuinfo; then
-            echo -e "${YELLOW}⚠${NC} Loading kvm_intel module..."
-            if modprobe kvm_intel; then
-                lsmod | grep -q "^kvm_intel" && echo -e "${GREEN}✓${NC} kvm_intel module loaded"
-                return 0
-            else
-                echo -e "${RED}✗${NC} Failed to load kvm_intel module"
-                return 1
-            fi
-        elif grep -q "vendor_id.*AuthenticAMD" /proc/cpuinfo; then
-            echo -e "${YELLOW}⚠${NC} Loading kvm_amd module..."
-            if modprobe kvm_amd; then
-                lsmod | grep -q "^kvm_amd" && echo -e "${GREEN}✓${NC} kvm_amd module loaded"
-                return 0
-            else
-                echo -e "${RED}✗${NC} Failed to load kvm_amd module"
-                return 1
-            fi
-        else
-            echo -e "${RED}✗${NC} Cannot detect CPU vendor for KVM module"
-            return 1
-        fi
-    fi
-}
-
-# Load OpenvSwitch kernel module
-# Usage: load_ovs_module
-# Returns: 0 on success, 1 on failure
-load_ovs_module() {
-    if lsmod | grep -q "^openvswitch"; then
-        echo -e "${GREEN}✓${NC} Kernel module openvswitch is already loaded"
-        return 0
-    else
-        echo -e "${YELLOW}⚠${NC} Loading openvswitch module..."
-        if modprobe openvswitch; then
-            lsmod | grep -q "^openvswitch" && echo -e "${GREEN}✓${NC} openvswitch module loaded"
-            return 0
-        else
-            echo -e "${RED}✗${NC} Failed to load openvswitch module"
-            return 1
-        fi
-    fi
-}
-
-# ============================================================================
 # System Services Functions
 # ============================================================================
 
@@ -393,21 +333,6 @@ verify_libvirt() {
         return 0
     else
         echo -e "${RED}✗${NC} libvirt is not functional"
-        return 1
-    fi
-}
-
-# Verify KVM support
-# Usage: verify_kvm
-# Returns: 0 if available, 1 otherwise
-verify_kvm() {
-    echo "Checking KVM support..."
-    if [ -e /dev/kvm ]; then
-        echo -e "${GREEN}✓${NC} /dev/kvm exists"
-        return 0
-    else
-        echo -e "${RED}✗${NC} /dev/kvm does not exist - KVM not available"
-        echo "  Enable virtualization in BIOS/UEFI"
         return 1
     fi
 }
@@ -617,7 +542,6 @@ require_root() {
         echo "This script requires root privileges to:"
         echo "  - Install system packages (dnf install)"
         echo "  - Start/enable system services (systemctl)"
-        echo "  - Load kernel modules (modprobe)"
         echo "  - Configure firewall (firewall-cmd)"
         echo "  - Create system directories (/var/lib/nova/instances)"
         echo "  - Setup NFS server for Cinder (exportfs, nfs-server)"
