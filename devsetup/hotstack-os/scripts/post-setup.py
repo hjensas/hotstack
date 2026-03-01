@@ -666,6 +666,9 @@ def setup_networking(conn, args):
 
 def _progress_callback(image_name):
     """Create a progress callback for download progress reporting"""
+    # Disable progress bars in CI environments
+    if os.environ.get("HOTSTACK_NO_PROGRESS"):
+        return None
 
     def show_progress(block_num, block_size, total_size):
         if total_size > 0:
