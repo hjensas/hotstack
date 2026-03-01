@@ -2,6 +2,7 @@
 profile: production
 exclude_paths:
   - roles/*/files/
+  - ci/playbooks/pre-hotstack-os.yml
 strict: true
 quiet: false
 verbosity: 1

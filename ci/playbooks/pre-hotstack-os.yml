@@ -1,0 +1,7 @@
+---
+# This playbook uses the prepare-workspace role from zuul-jobs
+# The role is available in Zuul CI through the required-projects configuration
+- name: Prepare workspace
+  hosts: all
+  roles:
+    - role: prepare-workspace  # noqa syntax-check[specific]

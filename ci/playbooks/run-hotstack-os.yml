@@ -1,0 +1,85 @@
+---
+- name: Test hotstack-os containerized OpenStack devsetup
+  hosts: all
+  vars:
+    hotstack_os_dir: "{{ ansible_user_dir }}/{{ zuul.project.src_dir }}/devsetup/hotstack-os"
+  tasks:
+
+    - name: Install EPEL repository
+      become: true
+      ansible.builtin.dnf:
+        name: epel-release
+        state: present
+
+    - name: Install essential packages for build
+      become: true
+      ansible.builtin.dnf:
+        name:
+          - podman
+          - podman-compose
+          - make
+        state: present
+
+    - name: Generate SSH keypair for smoke test
+      ansible.builtin.command:
+        cmd: ssh-keygen -t ed25519 -f {{ ansible_user_dir }}/.ssh/id_ed25519 -N "" -C "zuul@ci"
+        creates: "{{ ansible_user_dir }}/.ssh/id_ed25519.pub"
+
+    - name: Create log directory
+      ansible.builtin.file:
+        path: "{{ ansible_user_dir }}/zuul-output/logs"
+        state: directory
+        mode: '0755'
+
+    - name: Build, setup, and start hotstack-os services
+      become: true
+      block:
+        - name: Build container images
+          args:
+            chdir: "{{ hotstack_os_dir }}"
+            executable: /bin/bash
+          ansible.builtin.shell: |
+            set -o pipefail
+            make build 2>&1 | tee {{ ansible_user_dir }}/zuul-output/logs/make_build.log
+
+        - name: Install OpenStack client packages
+          args:
+            chdir: "{{ hotstack_os_dir }}"
+            executable: /bin/bash
+          ansible.builtin.shell: |
+            set -o pipefail
+            make install-client 2>&1 | tee {{ ansible_user_dir }}/zuul-output/logs/make_install-client.log
+
+        - name: Setup host environment
+          args:
+            chdir: "{{ hotstack_os_dir }}"
+            executable: /bin/bash
+          ansible.builtin.shell: |
+            set -o pipefail
+            make setup 2>&1 | tee {{ ansible_user_dir }}/zuul-output/logs/make_setup.log
+
+        - name: Start all services
+          args:
+            chdir: "{{ hotstack_os_dir }}"
+            executable: /bin/bash
+          ansible.builtin.shell: |
+            set -o pipefail
+            make start 2>&1 | tee {{ ansible_user_dir }}/zuul-output/logs/make_start.log
+
+    - name: Run post-setup to create project and upload images
+      args:
+        chdir: "{{ hotstack_os_dir }}"
+        executable: /bin/bash
+      environment:
+        HOTSTACK_NO_PROGRESS: "1"
+      ansible.builtin.shell: |
+        set -o pipefail
+        make post-setup 2>&1 | tee {{ ansible_user_dir }}/zuul-output/logs/make_post-setup.log
+
+    - name: Run smoke test
+      args:
+        chdir: "{{ hotstack_os_dir }}"
+        executable: /bin/bash
+      ansible.builtin.shell: |
+        set -o pipefail
+        make smoke-test 2>&1 | tee {{ ansible_user_dir }}/zuul-output/logs/make_smoke-test.log
