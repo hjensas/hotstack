@@ -8,6 +8,23 @@
     run: ci/playbooks/pre-commit.yml
 
 - job:
+    name: devsetup-hotstack-os-test
+    parent: base-minimal
+    nodeset: hotstack-image-vexxhost
+    description: |
+      Test HotStack-OS containerized OpenStack devsetup
+    timeout: 2700
+    required-projects:
+      - opendev.org/zuul/zuul-jobs
+    roles:
+      - zuul: opendev.org/zuul/zuul-jobs
+    pre-run: ci/playbooks/pre-hotstack-os.yml
+    run: ci/playbooks/run-hotstack-os.yml
+    post-run: ci/playbooks/post-hotstack-os.yml
+    files:
+      - ^devsetup/hotstack-os/.*
+
+- job:
     name: vexxhost-hotstack-ipxe-image
     parent: base-hotstack-ixpe-image-periodic
     nodeset: hotstack-image-vexxhost

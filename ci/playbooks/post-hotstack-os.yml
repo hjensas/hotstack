@@ -1,0 +1,263 @@
+---
+- name: Post-run tasks for HotStack-OS test
+  hosts: all
+  vars:
+    hotstack_os_dir: "{{ ansible_user_dir }}/{{ zuul.project.src_dir }}/devsetup/hotstack-os"
+    log_dir: "{{ ansible_user_dir }}/zuul-output/logs"
+  tasks:
+
+    - name: Collect container logs
+      block:
+        - name: Create log directory structure
+          ansible.builtin.file:
+            path: "{{ log_dir }}/containers"
+            state: directory
+            mode: '0755'
+
+        - name: Get list of hotstack-os containers
+          become: true
+          ansible.builtin.command: |
+            podman ps -a --filter "name=hotstack-os-*" --format "{% raw %}{{.Names}}{% endraw %}"
+          register: container_list
+
+        - name: Collect logs from each container
+          become: true
+          ansible.builtin.shell: |
+            podman logs {{ item }} > {{ log_dir }}/containers/{{ item }}.log 2>&1
+          loop: "{{ container_list.stdout_lines }}"
+          failed_when: false
+      rescue:
+        - name: Log container log collection failure
+          ansible.builtin.debug:
+            msg: "WARNING: Container log collection failed, continuing..."
+
+    - name: Collect system journal
+      block:
+        - name: Dump journalctl output
+          become: true
+          ansible.builtin.shell: |
+            journalctl > {{ log_dir }}/journal.log
+      rescue:
+        - name: Log journal collection failure
+          ansible.builtin.debug:
+            msg: "WARNING: Journal log collection failed, continuing..."
+
+    - name: Collect podman status
+      block:
+        - name: Dump podman ps output
+          become: true
+          args:
+            executable: /bin/bash
+          ansible.builtin.shell: |
+            set -o pipefail
+            podman ps -a 2>&1 | tee {{ log_dir }}/podman-ps.log
+      rescue:
+        - name: Log podman status collection failure
+          ansible.builtin.debug:
+            msg: "WARNING: Podman status collection failed, continuing..."
+
+    - name: Collect OVS/OVN configuration
+      block:
+        - name: Dump OVS and OVN configuration
+          become: true
+          ansible.builtin.shell: |
+            set -o pipefail
+            {
+              echo "===================================="
+              echo "OVS Show"
+              echo "===================================="
+              ovs-vsctl show
+              echo ""
+
+              echo "===================================="
+              echo "OVS Bridges"
+              echo "===================================="
+              ovs-vsctl list-br
+              echo ""
+
+              echo "===================================="
+              echo "OVS Bridge Mappings"
+              echo "===================================="
+              ovs-vsctl get Open_vSwitch . external_ids:ovn-bridge-mappings || echo "Not configured"
+              echo ""
+
+              echo "===================================="
+              echo "OVN Chassis (sbctl show)"
+              echo "===================================="
+              podman exec hotstack-os-ovn-northd ovn-sbctl show || echo "OVN southbound not available"
+              echo ""
+
+              echo "===================================="
+              echo "OVN Southbound Chassis List"
+              echo "===================================="
+              podman exec hotstack-os-ovn-northd ovn-sbctl list chassis || echo "OVN southbound not available"
+              echo ""
+
+              echo "===================================="
+              echo "OVN Northbound (nbctl show)"
+              echo "===================================="
+              podman exec hotstack-os-ovn-northd ovn-nbctl show || echo "OVN northbound not available"
+            } 2>&1 | tee {{ log_dir }}/ovs-ovn-config.log
+          args:
+            executable: /bin/bash
+      rescue:
+        - name: Log OVS/OVN configuration collection failure
+          ansible.builtin.debug:
+            msg: "WARNING: OVS/OVN configuration collection failed, continuing..."
+
+    - name: Collect network interfaces
+      block:
+        - name: Dump ip addr output
+          ansible.builtin.shell: |
+            set -o pipefail
+            ip addr 2>&1 | tee {{ log_dir }}/ip-addr.log
+          args:
+            executable: /bin/bash
+      rescue:
+        - name: Log network interface collection failure
+          ansible.builtin.debug:
+            msg: "WARNING: Network interface collection failed, continuing..."
+
+    - name: Collect hotstack status
+      block:
+        - name: Dump make status output
+          become: true
+          args:
+            chdir: "{{ hotstack_os_dir }}"
+            executable: /bin/bash
+          ansible.builtin.shell: |
+            set -o pipefail
+            make status 2>&1 | tee {{ log_dir }}/make_hotstack-status.log
+      rescue:
+        - name: Log hotstack status collection failure
+          ansible.builtin.debug:
+            msg: "WARNING: Hotstack status collection failed, continuing..."
+
+    - name: Collect runtime configuration files
+      block:
+        - name: Copy runtime config directory
+          become: true
+          ansible.builtin.copy:
+            src: /var/lib/hotstack-os/runtime/config/
+            dest: "{{ log_dir }}/runtime-config/"
+            remote_src: true
+            mode: preserve
+      rescue:
+        - name: Log runtime config collection failure
+          ansible.builtin.debug:
+            msg: "WARNING: Runtime config collection failed, continuing..."
+
+    - name: Collect OpenStack admin information
+      block:
+        - name: Dump OpenStack service catalog and endpoints
+          args:
+            chdir: "{{ hotstack_os_dir }}"
+            executable: /bin/bash
+          environment:
+            OS_CLOUD: hotstack-os-admin
+          ansible.builtin.shell: |
+            set -o pipefail
+            {
+              echo "===================================="
+              echo "OpenStack Service Catalog"
+              echo "===================================="
+              openstack catalog list
+              echo ""
+
+              echo "===================================="
+              echo "OpenStack Endpoints"
+              echo "===================================="
+              openstack endpoint list
+              echo ""
+
+              echo "===================================="
+              echo "Flavors"
+              echo "===================================="
+              openstack flavor list
+              echo ""
+
+              echo "===================================="
+              echo "Compute Services"
+              echo "===================================="
+              openstack compute service list
+              echo ""
+
+              echo "===================================="
+              echo "Network Agents"
+              echo "===================================="
+              openstack network agent list
+              echo ""
+
+              echo "===================================="
+              echo "Volume Services"
+              echo "===================================="
+              openstack volume service list
+            } 2>&1 | tee {{ log_dir }}/openstack-admin.log
+      rescue:
+        - name: Log OpenStack admin collection failure
+          ansible.builtin.debug:
+            msg: "WARNING: OpenStack admin information collection failed, continuing..."
+
+    - name: Collect OpenStack project resources
+      block:
+        - name: Dump OpenStack project resources
+          args:
+            chdir: "{{ hotstack_os_dir }}"
+            executable: /bin/bash
+          environment:
+            OS_CLOUD: hotstack-os
+          ansible.builtin.shell: |
+            set -o pipefail
+            {
+              echo "===================================="
+              echo "Networks"
+              echo "===================================="
+              openstack network list
+              echo ""
+
+              echo "===================================="
+              echo "Subnets"
+              echo "===================================="
+              openstack subnet list
+              echo ""
+
+              echo "===================================="
+              echo "Routers"
+              echo "===================================="
+              openstack router list
+              echo ""
+
+              echo "===================================="
+              echo "Keypairs"
+              echo "===================================="
+              openstack keypair list
+              echo ""
+
+              echo "===================================="
+              echo "Images"
+              echo "===================================="
+              openstack image list
+            } 2>&1 | tee {{ log_dir }}/openstack-project.log
+      rescue:
+        - name: Log OpenStack project collection failure
+          ansible.builtin.debug:
+            msg: "WARNING: OpenStack project resources collection failed, continuing..."
+
+    - name: Fix log file ownership
+      become: true
+      ansible.builtin.file:
+        path: "{{ log_dir }}"
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        recurse: true
+      failed_when: false
+
+    - name: Cleanup HotStack-OS environment
+      become: true
+      args:
+        chdir: "{{ hotstack_os_dir }}"
+      environment:
+        HOTSTACK_CLEANUP_CONFIRM: "yes"
+      ansible.builtin.shell: |
+        set -o pipefail
+        make clean 2>&1 | tee {{ log_dir }}/make_clean.log

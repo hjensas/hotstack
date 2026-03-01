@@ -4,6 +4,7 @@
     github-check:
       jobs:
         - hotstack-pre-commit
+        - devsetup-hotstack-os-test
         - vexxhost-hotstack-ipxe-image
         - vexxhost-hotstack-blank-image
         - vexxhost-hotstack-controller-image
