@@ -12,4 +12,4 @@ RUN mkdir -p /etc/dnsmasq.d
 EXPOSE 53/udp 53/tcp
 
 # Run dnsmasq in foreground
-CMD ["dnsmasq", "--no-daemon", "--log-queries", "--log-facility=-"]
+CMD ["dnsmasq", "--no-daemon", "--log-facility=-"]

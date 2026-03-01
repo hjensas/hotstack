@@ -125,11 +125,15 @@ clean:
 	@echo "  • Cinder NFS exports and data"
 	@echo "  • Host network infrastructure (OVS bridges, etc.)"
 	@echo ""
-	@read -p "Proceed with complete cleanup? [y/N] " -n 1 -r; \
-	echo; \
-	if [[ ! $$REPLY =~ ^[Yy]$$ ]]; then \
-		echo "Cancelled."; \
-		exit 1; \
+	@if [ -z "$$HOTSTACK_CLEANUP_CONFIRM" ]; then \
+		read -p "Proceed with complete cleanup? [y/N] " -n 1 -r; \
+		echo; \
+		if [[ ! $$REPLY =~ ^[Yy]$$ ]]; then \
+			echo "Cancelled."; \
+			exit 1; \
+		fi; \
+	else \
+		echo "Auto-confirmed via HOTSTACK_CLEANUP_CONFIRM"; \
 	fi; \
 	./scripts/clean.sh
 
