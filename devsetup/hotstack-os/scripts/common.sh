@@ -774,44 +774,9 @@ process_config_files() {
 
     echo -n "Processing ${description}... "
 
-    # Configuration file patterns to process
-    local file_patterns="\\( \
-        -name '*.conf' -o \
-        -name '*.ini' -o \
-        -name '*.cfg' -o \
-        -name '*.yaml' -o \
-        -name '*.example' \
-    \\)"
-
-    # Build perl substitution commands from remaining arguments (pairs of search/replace)
-    # Perl handles multi-line replacements properly, unlike sed
-    local perl_substitutions=""
-    while [ $# -gt 1 ]; do
-        local search=$1
-        local replace=$2
-        # Use \Q...\E to quote the search string (literal match, no regex)
-        if [ -n "$perl_substitutions" ]; then
-            perl_substitutions+="; "
-        fi
-        perl_substitutions+="s|\Q${search}\E|${replace}|g"
-        shift 2
-    done
-
-    # Find all config files
-    local config_files
-    config_files=$(eval "find '$dir' -type f $file_patterns")
-
-    # Process each config file and track failures
-    local failed=0
-    local file
-    for file in $config_files; do
-        if ! perl -i -pe "${perl_substitutions}" "$file" 2>/dev/null; then
-            echo -e "\n${RED}✗${NC} Failed to process: $file" >&2
-            failed=1
-        fi
-    done
-
-    if [ $failed -eq 1 ]; then
+    # Use Python script for robust config processing
+    # Python handles multi-line replacements and special characters naturally
+    if ! "$SCRIPT_DIR/process-configs.py" "$dir" "$@"; then
         echo -e "${RED}✗${NC}"
         return 1
     fi
