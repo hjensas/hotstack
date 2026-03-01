@@ -1,0 +1,46 @@
+# Copyright Red Hat, Inc.
+# All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License"); you may
+# not use this file except in compliance with the License. You may obtain
+# a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+# WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+# License for the specific language governing permissions and limitations
+# under the License.
+
+[Unit]
+Description=HotStack-OS DNSmasq Service
+Documentation=https://github.com/openstack-k8s-operators/hotstack
+After=hotstack-os-infra-setup.service
+Requires=hotstack-os-infra-setup.service
+PartOf=hotstack-os.target
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=10
+
+ExecStartPre=-/usr/bin/podman rm -f hotstack-os-dnsmasq
+ExecStart=/usr/bin/podman run \
+    --pull=never \
+    --name hotstack-os-dnsmasq \
+    --hostname dnsmasq \
+    --network host \
+    --volume __HOTSTACK_DATA_DIR__/runtime/config/dnsmasq/dnsmasq.conf:/etc/dnsmasq.conf:ro,z \
+    localhost/hotstack-os_dnsmasq:latest
+
+# Health check: CONTAINER INTERVAL TIMEOUT RETRIES START_PERIOD COMMAND
+ExecStartPost=/usr/local/bin/hotstack-healthcheck.sh hotstack-os-dnsmasq 10 5 3 0 nc -z 127.0.0.1 53
+ExecStop=/usr/bin/podman stop -t 10 hotstack-os-dnsmasq
+ExecStopPost=-/usr/bin/podman rm -f hotstack-os-dnsmasq
+
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=hotstack-os.target

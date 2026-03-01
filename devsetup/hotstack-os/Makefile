@@ -1,7 +1,10 @@
-.PHONY: help setup build config start stop restart clean status post-setup logs install-client smoke-test smoke-test-cleanup
+.PHONY: help setup build config start stop restart clean status post-setup logs install-client smoke-test smoke-test-cleanup install-deps install uninstall
 
 # Default data directory (can be overridden via environment variable or .env file)
 export HOTSTACK_DATA_DIR ?= /var/lib/hotstack-os
+
+# Script directory
+SCRIPT_DIR := $(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))/scripts
 
 # Reusable root privilege check
 # Usage: $(call require-root,target-name)
@@ -16,17 +19,22 @@ endef
 help:
 	@echo "HotStack-OS Makefile Commands:"
 	@echo ""
-	@echo "Setup:"
-	@echo "  sudo make setup               - Verify host prerequisites and setup NFS"
+	@echo "Dependencies:"
+	@echo "  sudo make install-deps        - Install system dependencies (packages and services)"
 	@echo "  sudo make install-client      - Install OpenStack client packages on host (optional)"
 	@echo ""
-	@echo "Lifecycle:"
+	@echo "Podman-Compose Deployment:"
+	@echo "  sudo make setup               - Setup host for podman-compose (includes install-deps)"
 	@echo "  sudo make build               - Build all container images"
 	@echo "  sudo make config              - Prepare runtime configuration files"
 	@echo "  sudo make start               - Start all services (includes config)"
 	@echo "  sudo make stop                - Stop all services"
 	@echo "  sudo make restart             - Restart all services"
 	@echo "  sudo make clean               - Complete reset: stop containers, remove all data, NFS, and host setup"
+	@echo ""
+	@echo "Systemd Deployment:"
+	@echo "  sudo make install             - Install HotStack-OS as systemd services (requires: install-deps, build)"
+	@echo "  sudo make uninstall           - Remove systemd services and cleanup"
 	@echo ""
 	@echo "Operations:"
 	@echo "  sudo make status              - Check status of all services"
@@ -39,9 +47,8 @@ help:
 	@echo ""
 	@echo "Note: Most commands require root privileges. Run with sudo or you'll see an error message."
 
-setup:
+setup: install-deps
 	$(call require-root,setup)
-	@echo "Checking host prerequisites..."
 	@./scripts/setup-host.sh
 
 build:
@@ -163,3 +170,15 @@ smoke-test-cleanup:
 	@echo "Cleaning up smoke test resources..."
 	@echo ""
 	./scripts/smoke-test.py --cleanup-only
+
+install-deps:
+	$(call require-root,install-deps)
+	@$(SCRIPT_DIR)/install-deps.sh
+
+install: install-deps config
+	$(call require-root,install)
+	@$(SCRIPT_DIR)/install-systemd.sh
+
+uninstall:
+	$(call require-root,uninstall)
+	@$(SCRIPT_DIR)/uninstall-systemd.sh

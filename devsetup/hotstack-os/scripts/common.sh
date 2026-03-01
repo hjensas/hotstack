@@ -48,6 +48,8 @@ HOSTS_END_MARKER="# END hotstack-os managed entries"
 
 # NFS constants
 NFS_EXPORTS_FILE="/etc/exports"
+NFS_EXPORTS_BEGIN_MARKER="# BEGIN hotstack-os managed exports"
+NFS_EXPORTS_END_MARKER="# END hotstack-os managed exports"
 
 # ============================================================================
 # Environment Configuration
@@ -96,7 +98,7 @@ load_env_file() {
 setup_directory() {
     local dir_path=$1
     local description=$2
-    local ownership=$3
+    local ownership=${3:-}
 
     echo -n "$description ($dir_path)... "
 
@@ -346,12 +348,10 @@ setup_openvswitch_service() {
     return 0
 }
 
-# Setup NFS server for Cinder volumes
-# Usage: setup_nfs_server
-setup_nfs_server() {
-    local service_name="nfs-server"
-
-    echo "Setting up NFS server for Cinder..."
+# Setup NFS exports for Cinder (without managing the service)
+# Usage: setup_nfs_exports
+setup_nfs_exports() {
+    echo "Setting up NFS exports for Cinder..."
 
     # Create export directory
     if ! setup_directory "$CINDER_NFS_EXPORT_DIR" "NFS export directory"; then
@@ -366,16 +366,18 @@ setup_nfs_server() {
     echo -n "Configuring NFS exports... "
     local export_line="$CINDER_NFS_EXPORT_DIR 127.0.0.1(rw,sync,no_root_squash,no_subtree_check)"
 
-    if grep -q "^${CINDER_NFS_EXPORT_DIR} " "$NFS_EXPORTS_FILE" 2>/dev/null; then
+    # Check if already configured (look for marker)
+    if grep -q "$NFS_EXPORTS_BEGIN_MARKER" "$NFS_EXPORTS_FILE" 2>/dev/null; then
         echo -e "${GREEN}✓${NC} (already configured)"
     else
-        echo "$export_line" >> "$NFS_EXPORTS_FILE"
+        # Add managed section with markers
+        {
+            echo ""
+            echo "$NFS_EXPORTS_BEGIN_MARKER"
+            echo "$export_line"
+            echo "$NFS_EXPORTS_END_MARKER"
+        } >> "$NFS_EXPORTS_FILE"
         echo -e "${GREEN}✓${NC}"
-    fi
-
-    # Enable and start NFS server
-    if ! check_systemd_service "$service_name"; then
-        enable_start_service "$service_name" || return 1
     fi
 
     # Export the shares
@@ -406,9 +408,12 @@ setup_nfs_server() {
 # Cleanup NFS exports for Cinder
 # Usage: cleanup_nfs_exports
 cleanup_nfs_exports() {
-    # Remove NFS export entry from /etc/exports
-    if [ -f "$NFS_EXPORTS_FILE" ] && grep -q "^${CINDER_NFS_EXPORT_DIR} " "$NFS_EXPORTS_FILE" 2>/dev/null; then
-        sed -i "\|^${CINDER_NFS_EXPORT_DIR} |d" "$NFS_EXPORTS_FILE"
+    # Remove managed section from /etc/exports
+    if [ -f "$NFS_EXPORTS_FILE" ] && grep -q "$NFS_EXPORTS_BEGIN_MARKER" "$NFS_EXPORTS_FILE" 2>/dev/null; then
+        # Remove everything between markers (inclusive)
+        sed -i "/$NFS_EXPORTS_BEGIN_MARKER/,/$NFS_EXPORTS_END_MARKER/d" "$NFS_EXPORTS_FILE"
+        # Remove any blank lines that were left before the marker
+        sed -i '${/^$/d;}' "$NFS_EXPORTS_FILE"
         exportfs -ra 2>/dev/null || true
     fi
 
@@ -734,7 +739,7 @@ process_config_files() {
 # Note: Requires environment variables to be loaded first
 prepare_all_configs() {
     # RabbitMQ transport URL for oslo.messaging
-    local transport_url="rabbit://${RABBITMQ_DEFAULT_USER}:${RABBITMQ_DEFAULT_PASS}@rabbitmq:5672/"
+    local transport_url="rabbit://${RABBITMQ_DEFAULT_USER}:${RABBITMQ_DEFAULT_PASS}@hotstack-os-rabbitmq:5672/"
 
     # Prepare runtime configs
     prepare_runtime_configs "keystone/fernet-keys" "keystone/credential-keys"

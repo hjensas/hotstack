@@ -38,6 +38,5 @@ build_service_images || exit 1
 
 echo -e "\n${GREEN}Build complete!${NC}"
 echo -e "Next steps:"
-echo -e "  1. Run 'sudo make setup' to configure host prerequisites (if not already done)"
-echo -e "  2. Run 'sudo make config' to prepare runtime configuration (or 'sudo make start' which includes config)"
-echo -e "  3. Run 'sudo make start' to start all services"
+echo -e "  Podman-Compose: sudo make setup && sudo make start"
+echo -e "  Systemd:        sudo make install"

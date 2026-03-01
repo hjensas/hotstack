@@ -29,7 +29,6 @@ COPY --chown=openstack:openstack configs/placement-uwsgi.ini /etc/placement/plac
 COPY --chmod=755 scripts/placement-wsgi.py /usr/local/bin/placement-wsgi.py
 
 # Copy entrypoint scripts with permissions
-COPY --chmod=644 scripts/common.sh /usr/local/lib/common.sh
 COPY --chmod=755 scripts/placement-entrypoint.sh /usr/local/bin/entrypoint.sh
 
 EXPOSE 8778

@@ -28,7 +28,16 @@ from pathlib import Path
 
 
 # File extensions to process
-CONFIG_EXTENSIONS = {".conf", ".ini", ".cfg", ".yaml", ".yml", ".example"}
+CONFIG_EXTENSIONS = {
+    ".conf",
+    ".ini",
+    ".cfg",
+    ".yaml",
+    ".yml",
+    ".example",
+    ".service",
+    ".target",
+}
 
 
 def find_config_files(config_dir):

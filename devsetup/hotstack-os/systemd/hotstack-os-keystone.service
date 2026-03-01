@@ -1,0 +1,55 @@
+# Copyright Red Hat, Inc.
+# All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License"); you may
+# not use this file except in compliance with the License. You may obtain
+# a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+# WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+# License for the specific language governing permissions and limitations
+# under the License.
+
+[Unit]
+Description=HotStack-OS Keystone Identity Service
+Documentation=https://github.com/openstack-k8s-operators/hotstack
+After=hotstack-os-mariadb.service hotstack-os-memcached.service hotstack-os-dnsmasq.service hotstack-os-haproxy.service
+Requires=hotstack-os-mariadb.service hotstack-os-memcached.service hotstack-os-dnsmasq.service hotstack-os-haproxy.service
+PartOf=hotstack-os.target
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=10
+
+ExecStartPre=-/usr/bin/podman rm -f hotstack-os-keystone
+ExecStart=/usr/bin/podman run \
+    --pull=never \
+    --name hotstack-os-keystone \
+    --hostname keystone \
+    --network hotstack-os \
+    --ip __KEYSTONE_IP__ \
+    --env OSLO_LOCKUTILS_ENABLED=false \
+    --env KEYSTONE_DB_PASSWORD=__DB_PASSWORD__ \
+    --env KEYSTONE_ADMIN_PASSWORD=__KEYSTONE_ADMIN_PASSWORD__ \
+    --env SERVICE_PASSWORD=__SERVICE_PASSWORD__ \
+    --env REGION_NAME=__REGION_NAME__ \
+    --volume __HOTSTACK_DATA_DIR__/runtime/config/keystone/keystone.conf:/etc/keystone/keystone.conf:ro,z \
+    --volume __HOTSTACK_DATA_DIR__/keystone/fernet-keys:/etc/keystone/fernet-keys:z \
+    --volume __HOTSTACK_DATA_DIR__/keystone/credential-keys:/etc/keystone/credential-keys:z \
+    --volume __HOTSTACK_DATA_DIR__/runtime/scripts/common.sh:/usr/local/lib/common.sh:ro,z \
+    localhost/hotstack-os_keystone:latest
+
+# Health check: CONTAINER INTERVAL TIMEOUT RETRIES START_PERIOD COMMAND
+ExecStartPost=/usr/local/bin/hotstack-healthcheck.sh hotstack-os-keystone 5 5 5 15 /usr/local/bin/keystone-healthcheck.sh
+ExecStop=/usr/bin/podman stop -t 10 hotstack-os-keystone
+ExecStopPost=-/usr/bin/podman rm -f hotstack-os-keystone
+
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=hotstack-os.target

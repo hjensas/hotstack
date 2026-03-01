@@ -55,7 +55,6 @@ RUN mkdir -p /var/lib/nova/instances /var/lock/nova && \
     chmod 0440 /etc/sudoers.d/nova-rootwrap
 
 # Copy entrypoint scripts with permissions
-COPY --chmod=644 scripts/common.sh /usr/local/lib/common.sh
 COPY --chmod=755 scripts/nova-api-entrypoint.sh /usr/local/bin/nova-api-entrypoint.sh
 COPY --chmod=755 scripts/nova-conductor-entrypoint.sh /usr/local/bin/nova-conductor-entrypoint.sh
 COPY --chmod=755 scripts/nova-scheduler-entrypoint.sh /usr/local/bin/nova-scheduler-entrypoint.sh

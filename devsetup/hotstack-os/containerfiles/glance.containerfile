@@ -27,7 +27,6 @@ RUN mkdir -p /var/lib/glance/images && \
     chown -R glance:glance /var/lib/glance
 
 # Copy entrypoint scripts with permissions
-COPY --chmod=644 scripts/common.sh /usr/local/lib/common.sh
 COPY --chmod=755 scripts/glance-entrypoint.sh /usr/local/bin/entrypoint.sh
 
 EXPOSE 9292

@@ -51,7 +51,6 @@ RUN mkdir -p /var/lib/neutron /run/neutron && \
     chown -R neutron:neutron /var/lib/neutron /run/neutron
 
 # Copy entrypoint scripts with permissions
-COPY --chmod=644 scripts/common.sh /usr/local/lib/common.sh
 COPY --chmod=755 scripts/neutron-server-entrypoint.sh /usr/local/bin/neutron-server-entrypoint.sh
 COPY --chmod=755 scripts/neutron-ovn-metadata-agent-entrypoint.sh /usr/local/bin/neutron-ovn-metadata-agent-entrypoint.sh
 

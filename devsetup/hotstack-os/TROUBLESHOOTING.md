@@ -258,8 +258,11 @@ sudo rm -rf /var/lib/hotstack-os
 # Remove networks
 sudo podman network rm openstack_openstack
 
-# Rebuild from scratch
+# Rebuild from scratch (podman-compose)
 sudo make build && sudo make setup && sudo make start
+
+# Rebuild from scratch (systemd)
+sudo make build && sudo make install && sudo systemctl restart hotstack-os.target
 ```
 
 ## Service-Specific Debugging

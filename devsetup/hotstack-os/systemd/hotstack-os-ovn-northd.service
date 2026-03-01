@@ -1,0 +1,50 @@
+# Copyright Red Hat, Inc.
+# All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License"); you may
+# not use this file except in compliance with the License. You may obtain
+# a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+# WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+# License for the specific language governing permissions and limitations
+# under the License.
+
+[Unit]
+Description=HotStack-OS OVN Northd Service
+Documentation=https://github.com/openstack-k8s-operators/hotstack
+After=hotstack-os-keystone.service
+Requires=hotstack-os-keystone.service
+PartOf=hotstack-os.target
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=10
+
+ExecStartPre=-/usr/bin/podman rm -f hotstack-os-ovn-northd
+ExecStart=/usr/bin/podman run \
+    --pull=never \
+    --name hotstack-os-ovn-northd \
+    --hostname ovn-northd \
+    --privileged \
+    --network hotstack-os \
+    --ip __OVN_NORTHD_IP__ \
+    --volume __HOTSTACK_DATA_DIR__/ovn:/var/lib/ovn:z \
+    --volume __HOTSTACK_DATA_DIR__/ovn-run:/run/ovn:z \
+    --entrypoint /usr/local/bin/ovn-northd-entrypoint.sh \
+    localhost/hotstack-os-ovn:latest
+
+# Health check: CONTAINER INTERVAL TIMEOUT RETRIES START_PERIOD COMMAND
+ExecStartPost=/usr/local/bin/hotstack-healthcheck.sh hotstack-os-ovn-northd 10 5 5 20 sh -c "test -f /run/ovn/ovn-northd.pid && kill -0 $(cat /run/ovn/ovn-northd.pid) && ss -tln | grep -q :6641 && ss -tln | grep -q :6642"
+ExecStop=/usr/bin/podman stop -t 10 hotstack-os-ovn-northd
+ExecStopPost=-/usr/bin/podman rm -f hotstack-os-ovn-northd
+
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=hotstack-os.target

@@ -28,7 +28,6 @@ RUN mkdir -p /var/lib/heat && \
     chown -R heat:heat /var/lib/heat
 
 # Copy entrypoint scripts with permissions
-COPY --chmod=644 scripts/common.sh /usr/local/lib/common.sh
 COPY --chmod=755 scripts/heat-api-entrypoint.sh /usr/local/bin/heat-api-entrypoint.sh
 COPY --chmod=755 scripts/heat-engine-entrypoint.sh /usr/local/bin/heat-engine-entrypoint.sh
 

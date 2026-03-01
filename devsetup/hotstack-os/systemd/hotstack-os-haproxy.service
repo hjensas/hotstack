@@ -1,0 +1,55 @@
+# Copyright Red Hat, Inc.
+# All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License"); you may
+# not use this file except in compliance with the License. You may obtain
+# a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+# WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+# License for the specific language governing permissions and limitations
+# under the License.
+
+[Unit]
+Description=HotStack-OS HAProxy Service
+Documentation=https://github.com/openstack-k8s-operators/hotstack
+After=hotstack-os-infra-setup.service
+Requires=hotstack-os-infra-setup.service
+PartOf=hotstack-os.target
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=10
+
+ExecStartPre=-/usr/bin/podman rm -f hotstack-os-haproxy
+ExecStart=/usr/bin/podman run \
+    --pull=never \
+    --name hotstack-os-haproxy \
+    --hostname haproxy \
+    --network hotstack-os \
+    --volume __HOTSTACK_DATA_DIR__/runtime/config/haproxy/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro,z \
+    --publish __BREX_IP__:5000:5000 \
+    --publish __BREX_IP__:9292:9292 \
+    --publish __BREX_IP__:8778:8778 \
+    --publish __BREX_IP__:8774:8774 \
+    --publish __BREX_IP__:9696:9696 \
+    --publish __BREX_IP__:8776:8776 \
+    --publish __BREX_IP__:8004:8004 \
+    --publish __BREX_IP__:6080:6080 \
+    --publish __BREX_IP__:8404:8404 \
+    localhost/hotstack-os_haproxy:latest
+
+# Health check: CONTAINER INTERVAL TIMEOUT RETRIES START_PERIOD COMMAND
+ExecStartPost=/usr/local/bin/hotstack-healthcheck.sh hotstack-os-haproxy 10 5 3 0 nc -z 127.0.0.1 8404
+ExecStop=/usr/bin/podman stop -t 10 hotstack-os-haproxy
+ExecStopPost=-/usr/bin/podman rm -f hotstack-os-haproxy
+
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=hotstack-os.target

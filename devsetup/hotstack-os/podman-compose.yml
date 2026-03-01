@@ -235,8 +235,8 @@ services:
       dockerfile: nova.containerfile
       args:
         OPENSTACK_BRANCH: ${OPENSTACK_BRANCH}
-        SERVICE_TYPE: api
         APT_PROXY: ${APT_PROXY:-}
+    image: localhost/hotstack-os-nova:latest
     container_name: hotstack-os-nova-api
     restart: unless-stopped
     hostname: nova
@@ -280,8 +280,8 @@ services:
       dockerfile: nova.containerfile
       args:
         OPENSTACK_BRANCH: ${OPENSTACK_BRANCH}
-        SERVICE_TYPE: conductor
         APT_PROXY: ${APT_PROXY:-}
+    image: localhost/hotstack-os-nova:latest
     container_name: hotstack-os-nova-conductor
     restart: unless-stopped
     hostname: nova-conductor
@@ -314,8 +314,8 @@ services:
       dockerfile: nova.containerfile
       args:
         OPENSTACK_BRANCH: ${OPENSTACK_BRANCH}
-        SERVICE_TYPE: scheduler
         APT_PROXY: ${APT_PROXY:-}
+    image: localhost/hotstack-os-nova:latest
     container_name: hotstack-os-nova-scheduler
     restart: unless-stopped
     hostname: nova-scheduler
@@ -348,8 +348,8 @@ services:
       dockerfile: nova.containerfile
       args:
         OPENSTACK_BRANCH: ${OPENSTACK_BRANCH}
-        SERVICE_TYPE: compute
         APT_PROXY: ${APT_PROXY:-}
+    image: localhost/hotstack-os-nova:latest
     container_name: hotstack-os-nova-compute
     restart: unless-stopped
     hostname: nova-compute
@@ -398,8 +398,8 @@ services:
       dockerfile: nova.containerfile
       args:
         OPENSTACK_BRANCH: ${OPENSTACK_BRANCH}
-        SERVICE_TYPE: api
         APT_PROXY: ${APT_PROXY:-}
+    image: localhost/hotstack-os-nova:latest
     container_name: hotstack-os-nova-novncproxy
     restart: unless-stopped
     hostname: nova-novncproxy
@@ -431,8 +431,8 @@ services:
       context: ./containerfiles
       dockerfile: ovn.containerfile
       args:
-        SERVICE_TYPE: northd
         APT_PROXY: ${APT_PROXY:-}
+    image: localhost/hotstack-os-ovn:latest
     container_name: hotstack-os-ovn-northd
     restart: unless-stopped
     hostname: ovn-northd
@@ -459,8 +459,8 @@ services:
       context: ./containerfiles
       dockerfile: ovn.containerfile
       args:
-        SERVICE_TYPE: controller
         APT_PROXY: ${APT_PROXY:-}
+    image: localhost/hotstack-os-ovn:latest
     container_name: hotstack-os-ovn-controller
     restart: unless-stopped
     hostname: ovn-controller
@@ -493,8 +493,8 @@ services:
       dockerfile: neutron.containerfile
       args:
         OPENSTACK_BRANCH: ${OPENSTACK_BRANCH}
-        SERVICE_TYPE: server
         APT_PROXY: ${APT_PROXY:-}
+    image: localhost/hotstack-os-neutron:latest
     container_name: hotstack-os-neutron-server
     restart: unless-stopped
     hostname: neutron
@@ -538,8 +538,8 @@ services:
       dockerfile: neutron.containerfile
       args:
         OPENSTACK_BRANCH: ${OPENSTACK_BRANCH}
-        SERVICE_TYPE: metadata
         APT_PROXY: ${APT_PROXY:-}
+    image: localhost/hotstack-os-neutron:latest
     container_name: hotstack-os-neutron-metadata
     restart: unless-stopped
     hostname: neutron-metadata
@@ -576,8 +576,8 @@ services:
       dockerfile: cinder.containerfile
       args:
         OPENSTACK_BRANCH: ${OPENSTACK_BRANCH}
-        SERVICE_TYPE: api
         APT_PROXY: ${APT_PROXY:-}
+    image: localhost/hotstack-os-cinder:latest
     container_name: hotstack-os-cinder-api
     restart: unless-stopped
     hostname: cinder
@@ -618,8 +618,8 @@ services:
       dockerfile: cinder.containerfile
       args:
         OPENSTACK_BRANCH: ${OPENSTACK_BRANCH}
-        SERVICE_TYPE: scheduler
         APT_PROXY: ${APT_PROXY:-}
+    image: localhost/hotstack-os-cinder:latest
     container_name: hotstack-os-cinder-scheduler
     restart: unless-stopped
     hostname: cinder-scheduler
@@ -651,8 +651,8 @@ services:
       dockerfile: cinder.containerfile
       args:
         OPENSTACK_BRANCH: ${OPENSTACK_BRANCH}
-        SERVICE_TYPE: volume
         APT_PROXY: ${APT_PROXY:-}
+    image: localhost/hotstack-os-cinder:latest
     container_name: hotstack-os-cinder-volume
     restart: unless-stopped
     hostname: cinder-volume
@@ -694,7 +694,7 @@ services:
       dockerfile: heat.containerfile
       args:
         OPENSTACK_BRANCH: ${OPENSTACK_BRANCH}
-        SERVICE_TYPE: api
+    image: localhost/hotstack-os-heat:latest
     container_name: hotstack-os-heat-api
     restart: unless-stopped
     hostname: heat
@@ -735,7 +735,7 @@ services:
       dockerfile: heat.containerfile
       args:
         OPENSTACK_BRANCH: ${OPENSTACK_BRANCH}
-        SERVICE_TYPE: engine
+    image: localhost/hotstack-os-heat:latest
     container_name: hotstack-os-heat-engine
     restart: unless-stopped
     hostname: heat-engine

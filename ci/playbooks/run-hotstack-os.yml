@@ -3,6 +3,8 @@
   hosts: all
   vars:
     hotstack_os_dir: "{{ ansible_user_dir }}/{{ zuul.project.src_dir }}/devsetup/hotstack-os"
+    # Set to 'systemd' to test systemd deployment, 'podman-compose' for compose (default)
+    hotstack_deployment_method: "{{ deployment_method | default('podman-compose') }}"
   tasks:
 
     - name: Install EPEL repository
@@ -57,7 +59,7 @@
       ansible.builtin.lineinfile:
         path: "{{ hotstack_os_dir }}/.env"
         regexp: '^BUILD_PARALLEL='
-        line: 'BUILD_PARALLEL=4'
+        line: 'BUILD_PARALLEL=1'
 
     - name: Build, setup, and start hotstack-os services
       become: true
@@ -69,6 +71,10 @@
           ansible.builtin.shell: |
             set -o pipefail
             make build 2>&1 | tee {{ ansible_user_dir }}/zuul-output/logs/make_build.log
+          retries: 3
+          delay: "{{ 60 | random(start=30, step=1, seed=zuul.build) }}"
+          register: build_result
+          until: build_result.rc == 0
 
         - name: Install OpenStack client packages
           args:
@@ -86,13 +92,33 @@
             set -o pipefail
             make setup 2>&1 | tee {{ ansible_user_dir }}/zuul-output/logs/make_setup.log
 
-        - name: Start all services
+        - name: Start all services (podman-compose)
+          when: hotstack_deployment_method == 'podman-compose'
           args:
             chdir: "{{ hotstack_os_dir }}"
             executable: /bin/bash
           ansible.builtin.shell: |
             set -o pipefail
             make start 2>&1 | tee {{ ansible_user_dir }}/zuul-output/logs/make_start.log
+
+        - name: Install and start systemd services
+          when: hotstack_deployment_method == 'systemd'
+          args:
+            chdir: "{{ hotstack_os_dir }}"
+            executable: /bin/bash
+          ansible.builtin.shell: |
+            set -o pipefail
+            make install 2>&1 | tee {{ ansible_user_dir }}/zuul-output/logs/make_install.log
+
+        - name: Wait for systemd services to be ready
+          when: hotstack_deployment_method == 'systemd'
+          ansible.builtin.systemd:
+            name: hotstack-os.target
+            state: started
+          register: systemd_status
+          until: systemd_status is succeeded
+          retries: 60
+          delay: 5
 
     - name: Run post-setup to create project and upload images
       args:
