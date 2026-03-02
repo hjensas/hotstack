@@ -236,6 +236,7 @@ services:
       args:
         OPENSTACK_BRANCH: ${OPENSTACK_BRANCH}
         SERVICE_TYPE: api
+        APT_PROXY: ${APT_PROXY:-}
     container_name: hotstack-os-nova-api
     restart: unless-stopped
     hostname: nova
@@ -280,6 +281,7 @@ services:
       args:
         OPENSTACK_BRANCH: ${OPENSTACK_BRANCH}
         SERVICE_TYPE: conductor
+        APT_PROXY: ${APT_PROXY:-}
     container_name: hotstack-os-nova-conductor
     restart: unless-stopped
     hostname: nova-conductor
@@ -313,6 +315,7 @@ services:
       args:
         OPENSTACK_BRANCH: ${OPENSTACK_BRANCH}
         SERVICE_TYPE: scheduler
+        APT_PROXY: ${APT_PROXY:-}
     container_name: hotstack-os-nova-scheduler
     restart: unless-stopped
     hostname: nova-scheduler
@@ -346,6 +349,7 @@ services:
       args:
         OPENSTACK_BRANCH: ${OPENSTACK_BRANCH}
         SERVICE_TYPE: compute
+        APT_PROXY: ${APT_PROXY:-}
     container_name: hotstack-os-nova-compute
     restart: unless-stopped
     hostname: nova-compute
@@ -395,6 +399,7 @@ services:
       args:
         OPENSTACK_BRANCH: ${OPENSTACK_BRANCH}
         SERVICE_TYPE: api
+        APT_PROXY: ${APT_PROXY:-}
     container_name: hotstack-os-nova-novncproxy
     restart: unless-stopped
     hostname: nova-novncproxy
@@ -427,6 +432,7 @@ services:
       dockerfile: ovn.containerfile
       args:
         SERVICE_TYPE: northd
+        APT_PROXY: ${APT_PROXY:-}
     container_name: hotstack-os-ovn-northd
     restart: unless-stopped
     hostname: ovn-northd
@@ -454,6 +460,7 @@ services:
       dockerfile: ovn.containerfile
       args:
         SERVICE_TYPE: controller
+        APT_PROXY: ${APT_PROXY:-}
     container_name: hotstack-os-ovn-controller
     restart: unless-stopped
     hostname: ovn-controller
@@ -487,6 +494,7 @@ services:
       args:
         OPENSTACK_BRANCH: ${OPENSTACK_BRANCH}
         SERVICE_TYPE: server
+        APT_PROXY: ${APT_PROXY:-}
     container_name: hotstack-os-neutron-server
     restart: unless-stopped
     hostname: neutron
@@ -531,6 +539,7 @@ services:
       args:
         OPENSTACK_BRANCH: ${OPENSTACK_BRANCH}
         SERVICE_TYPE: metadata
+        APT_PROXY: ${APT_PROXY:-}
     container_name: hotstack-os-neutron-metadata
     restart: unless-stopped
     hostname: neutron-metadata
@@ -568,6 +577,7 @@ services:
       args:
         OPENSTACK_BRANCH: ${OPENSTACK_BRANCH}
         SERVICE_TYPE: api
+        APT_PROXY: ${APT_PROXY:-}
     container_name: hotstack-os-cinder-api
     restart: unless-stopped
     hostname: cinder
@@ -609,6 +619,7 @@ services:
       args:
         OPENSTACK_BRANCH: ${OPENSTACK_BRANCH}
         SERVICE_TYPE: scheduler
+        APT_PROXY: ${APT_PROXY:-}
     container_name: hotstack-os-cinder-scheduler
     restart: unless-stopped
     hostname: cinder-scheduler
@@ -641,6 +652,7 @@ services:
       args:
         OPENSTACK_BRANCH: ${OPENSTACK_BRANCH}
         SERVICE_TYPE: volume
+        APT_PROXY: ${APT_PROXY:-}
     container_name: hotstack-os-cinder-volume
     restart: unless-stopped
     hostname: cinder-volume

@@ -622,9 +622,16 @@ exit_with_error_summary() {
 # Usage: build_base_builder_image
 build_base_builder_image() {
     echo -n "Building base builder image... "
+
+    # Optional build argument for apt caching proxy
+    local build_args=""
+    [ -n "${APT_PROXY:-}" ] && build_args="$build_args --build-arg APT_PROXY=$APT_PROXY"
+
+    # shellcheck disable=SC2086
     if ! podman build --target=builder \
         -t localhost/hotstack-os-base-builder:latest \
         -f containerfiles/base-openstack.containerfile \
+        $build_args \
         containerfiles/ &>/dev/null; then
         echo -e "${RED}✗${NC}"
         return 1
@@ -636,9 +643,16 @@ build_base_builder_image() {
 # Usage: build_base_runtime_image
 build_base_runtime_image() {
     echo -n "Building base runtime image... "
+
+    # Optional build argument for apt caching proxy
+    local build_args=""
+    [ -n "${APT_PROXY:-}" ] && build_args="$build_args --build-arg APT_PROXY=$APT_PROXY"
+
+    # shellcheck disable=SC2086
     if ! podman build --target=runtime \
         -t localhost/hotstack-os-base:latest \
         -f containerfiles/base-openstack.containerfile \
+        $build_args \
         containerfiles/ &>/dev/null; then
         echo -e "${RED}✗${NC}"
         return 1
@@ -651,9 +665,16 @@ build_base_runtime_image() {
 build_service_images() {
     echo "Building service container images (this will take ~8 minutes)..."
 
-    if ! podman-compose build; then
+    # Use BUILD_PARALLEL environment variable to control concurrency (default: 1 for serial builds)
+    # IMPORTANT: podman-compose defaults to UNLIMITED parallelism (sys.maxsize) which can cause
+    # storage layer corruption. We default to 1 for stability.
+    # Set BUILD_PARALLEL=4 (or higher) in .env to build faster with more parallelism
+    local parallel_jobs=${BUILD_PARALLEL:-1}
+
+    if ! podman-compose --parallel "$parallel_jobs" build; then
         echo -e "${RED}Build failed!${NC}"
         echo "If you see permission errors, try: podman system reset -f"
+        echo "If you see storage/layer errors, try reducing BUILD_PARALLEL in .env (current: $parallel_jobs)"
         return 1
     fi
 

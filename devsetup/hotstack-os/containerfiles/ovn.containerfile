@@ -1,6 +1,12 @@
 FROM debian:bookworm-slim
 
 ARG SERVICE_TYPE=northd
+ARG APT_PROXY=""
+
+# Configure apt proxy if provided (for apt-cacher-ng)
+RUN if [ -n "$APT_PROXY" ]; then \
+        echo "Acquire::http::Proxy \"$APT_PROXY\";" > /etc/apt/apt.conf.d/01proxy; \
+    fi
 
 # Install OVN and OpenvSwitch
 RUN apt-get update && \

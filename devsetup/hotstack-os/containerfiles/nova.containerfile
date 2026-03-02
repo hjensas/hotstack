@@ -19,6 +19,12 @@ FROM localhost/hotstack-os-base:latest
 
 ARG OPENSTACK_BRANCH=stable/2025.1
 ARG SERVICE_TYPE=api
+ARG APT_PROXY=""
+
+# Configure apt proxy if provided (for apt-cacher-ng)
+RUN if [ -n "$APT_PROXY" ]; then \
+        echo "Acquire::http::Proxy \"$APT_PROXY\";" > /etc/apt/apt.conf.d/01proxy; \
+    fi
 
 # Install Nova-specific runtime dependencies
 RUN apt-get update && \

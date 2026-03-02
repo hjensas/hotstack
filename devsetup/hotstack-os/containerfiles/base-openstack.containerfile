@@ -1,6 +1,14 @@
 # Build stage - includes all dev tools for building OpenStack services
 FROM debian:bookworm-slim AS builder
 
+# Optional build argument for apt caching proxy
+ARG APT_PROXY=""
+
+# Configure apt proxy if provided (for apt-cacher-ng)
+RUN if [ -n "$APT_PROXY" ]; then \
+        echo "Acquire::http::Proxy \"$APT_PROXY\";" > /etc/apt/apt.conf.d/01proxy; \
+    fi
+
 # Install build dependencies
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
@@ -23,6 +31,14 @@ RUN apt-get update && \
 
 # Runtime stage - lean image with only runtime dependencies
 FROM debian:bookworm-slim AS runtime
+
+# Optional build argument for apt caching proxy
+ARG APT_PROXY=""
+
+# Configure apt proxy if provided (for apt-cacher-ng)
+RUN if [ -n "$APT_PROXY" ]; then \
+        echo "Acquire::http::Proxy \"$APT_PROXY\";" > /etc/apt/apt.conf.d/01proxy; \
+    fi
 
 # Install only runtime dependencies
 RUN apt-get update && \
