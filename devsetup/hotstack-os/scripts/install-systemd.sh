@@ -46,10 +46,10 @@ for img in "${REQUIRED_BASE_IMAGES[@]}"; do
     fi
 done
 
-# Check if podman-compose can find the service images
-if ! podman-compose config >/dev/null 2>&1; then
+# Check if we have any missing images
+if [ ${#MISSING_IMAGES[@]} -gt 0 ]; then
     echo ""
-    echo "Error: Container images not found or podman-compose configuration invalid"
+    echo "Error: Required container images not found"
     echo ""
     echo "Please build the images first:"
     echo "  sudo make build"

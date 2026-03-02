@@ -43,7 +43,7 @@ ExecStart=/usr/bin/podman run \
     localhost/hotstack-os-heat:latest
 
 # Health check: CONTAINER INTERVAL TIMEOUT RETRIES START_PERIOD COMMAND
-ExecStartPost=/usr/local/bin/hotstack-healthcheck.sh hotstack-os-heat-api 10 5 5 5 curl -f http://localhost:8004/
+ExecStartPost=/usr/local/bin/hotstack-healthcheck.sh hotstack-os-heat-api 10 5 15 10 curl -f http://localhost:8004/
 ExecStop=/usr/bin/podman stop -t 10 hotstack-os-heat-api
 ExecStopPost=-/usr/bin/podman rm -f hotstack-os-heat-api
 

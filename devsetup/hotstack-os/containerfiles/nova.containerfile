@@ -30,17 +30,9 @@ RUN if [ -n "$APT_PROXY" ]; then \
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         libvirt-clients \
-        iproute2 \
-        iptables \
-        ebtables \
-        dnsmasq \
         genisoimage \
         sysfsutils \
-        procps \
         novnc \
-        qemu-utils \
-        sudo \
-        nfs-common \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy installed packages and config from builder

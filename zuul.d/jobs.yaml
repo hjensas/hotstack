@@ -8,11 +8,11 @@
     run: ci/playbooks/pre-commit.yml
 
 - job:
-    name: devsetup-hotstack-os-podman-compose
+    name: devsetup-hotstack-os
     parent: base-minimal
     nodeset: hotstack-image-vexxhost
     description: |
-      Test HotStack-OS containerized OpenStack devsetup with podman-compose
+      Test HotStack-OS containerized OpenStack devsetup
     timeout: 2700
     required-projects:
       - opendev.org/zuul/zuul-jobs
@@ -21,27 +21,6 @@
     pre-run: ci/playbooks/pre-hotstack-os.yml
     run: ci/playbooks/run-hotstack-os.yml
     post-run: ci/playbooks/post-hotstack-os.yml
-    vars:
-      deployment_method: podman-compose
-    files:
-      - ^devsetup/hotstack-os/.*
-
-- job:
-    name: devsetup-hotstack-os-systemd
-    parent: base-minimal
-    nodeset: hotstack-image-vexxhost
-    description: |
-      Test HotStack-OS containerized OpenStack devsetup with systemd
-    timeout: 2700
-    required-projects:
-      - opendev.org/zuul/zuul-jobs
-    roles:
-      - zuul: opendev.org/zuul/zuul-jobs
-    pre-run: ci/playbooks/pre-hotstack-os.yml
-    run: ci/playbooks/run-hotstack-os.yml
-    post-run: ci/playbooks/post-hotstack-os.yml
-    vars:
-      deployment_method: systemd
     files:
       - ^devsetup/hotstack-os/.*
 

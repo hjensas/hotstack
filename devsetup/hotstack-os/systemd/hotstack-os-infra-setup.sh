@@ -38,8 +38,7 @@ NFS_EXPORTS_END_MARKER="# END hotstack-os managed exports"
 CINDER_NFS_EXPORT_DIR="${CINDER_NFS_EXPORT_DIR:-/var/lib/hotstack-os/cinder-nfs}"
 
 # Service data directories to create
-# NOTE: For systemd deployment, all directories must exist before podman run
-# (unlike podman-compose which creates them automatically)
+# NOTE: All directories must exist before podman run
 SERVICE_DATA_DIRS=(
     "mysql"
     "rabbitmq"

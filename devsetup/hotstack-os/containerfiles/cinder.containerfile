@@ -30,10 +30,7 @@ RUN if [ -n "$APT_PROXY" ]; then \
 # Install Cinder-specific runtime dependencies
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-        nfs-common \
         kmod \
-        sudo \
-        qemu-utils \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy installed packages and config from builder

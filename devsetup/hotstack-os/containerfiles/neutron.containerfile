@@ -30,15 +30,8 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         openvswitch-common \
         ovn-common \
-        iproute2 \
-        iptables \
-        ebtables \
-        iputils-ping \
-        dnsmasq \
         haproxy \
         netcat-openbsd \
-        procps \
-        sudo \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy installed packages and config from builder

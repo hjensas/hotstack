@@ -3,8 +3,6 @@
   hosts: all
   vars:
     hotstack_os_dir: "{{ ansible_user_dir }}/{{ zuul.project.src_dir }}/devsetup/hotstack-os"
-    # Set to 'systemd' to test systemd deployment, 'podman-compose' for compose (default)
-    hotstack_deployment_method: "{{ deployment_method | default('podman-compose') }}"
   tasks:
 
     - name: Install EPEL repository
@@ -59,22 +57,79 @@
       ansible.builtin.lineinfile:
         path: "{{ hotstack_os_dir }}/.env"
         regexp: '^BUILD_PARALLEL='
-        line: 'BUILD_PARALLEL=1'
+        line: 'BUILD_PARALLEL=8'
+
+    - name: Verify apt-cacher-ng is running and accessible
+      ansible.builtin.uri:
+        url: http://localhost:3142/acng-report.html
+        status_code: 200
+      retries: 5
+      delay: 2
+      register: apt_cache_check
+
+    - name: Test apt-cacher-ng connectivity from container context
+      ansible.builtin.command:
+        cmd: >-
+          podman run --rm debian:bookworm-slim sh -c
+          "curl -f -s -o /dev/null http://host.containers.internal:3142/
+          && echo 'Proxy reachable' || echo 'Proxy NOT reachable'"
+      register: container_proxy_test
+      changed_when: false
+
+    - name: Display container proxy test result
+      ansible.builtin.debug:
+        msg: "{{ container_proxy_test.stdout }}"
 
     - name: Build, setup, and start hotstack-os services
       become: true
       block:
-        - name: Build container images
+        - name: Install dependencies
           args:
             chdir: "{{ hotstack_os_dir }}"
             executable: /bin/bash
           ansible.builtin.shell: |
             set -o pipefail
-            make build 2>&1 | tee {{ ansible_user_dir }}/zuul-output/logs/make_build.log
-          retries: 3
-          delay: "{{ 60 | random(start=30, step=1, seed=zuul.build) }}"
+            make install-deps 2>&1 | tee {{ ansible_user_dir }}/zuul-output/logs/make_install-deps.log
+
+        - name: Build container images (with retry logic)
+          args:
+            chdir: "{{ hotstack_os_dir }}"
+            executable: /bin/bash
+          ansible.builtin.shell: |
+            set -o pipefail
+
+            # Try up to 3 times: first 2 without cleanup, then cleanup and try once more
+            for attempt in 1 2 3; do
+              echo "=== Build attempt $attempt of 3 ==="
+
+              if make build 2>&1 | tee {{ ansible_user_dir }}/zuul-output/logs/make_build_attempt_${attempt}.log; then
+                echo "=== Build succeeded on attempt $attempt ==="
+                exit 0
+              fi
+
+              echo "=== Build attempt $attempt failed ==="
+
+              # Only cleanup after second failure (before third attempt)
+              if [ $attempt -eq 2 ]; then
+                echo "=== Cleaning up podman state before final retry ==="
+                podman rm -af 2>&1 | tee -a {{ ansible_user_dir }}/zuul-output/logs/podman_cleanup.log || true
+                podman rmi -af 2>&1 | tee -a {{ ansible_user_dir }}/zuul-output/logs/podman_cleanup.log || true
+                podman system prune -af --volumes 2>&1 | tee -a {{ ansible_user_dir }}/zuul-output/logs/podman_cleanup.log || true
+
+                # Random delay between 30-60 seconds
+                delay=$((30 + RANDOM % 31))
+                echo "=== Waiting ${delay} seconds before final retry ==="
+                sleep $delay
+              elif [ $attempt -eq 1 ]; then
+                # Short delay between first and second attempt
+                echo "=== Waiting 10 seconds before retry ==="
+                sleep 10
+              fi
+            done
+
+            echo "=== All 3 build attempts failed ==="
+            exit 1
           register: build_result
-          until: build_result.rc == 0
 
         - name: Install OpenStack client packages
           args:
@@ -84,25 +139,7 @@
             set -o pipefail
             make install-client 2>&1 | tee {{ ansible_user_dir }}/zuul-output/logs/make_install-client.log
 
-        - name: Setup host environment
-          args:
-            chdir: "{{ hotstack_os_dir }}"
-            executable: /bin/bash
-          ansible.builtin.shell: |
-            set -o pipefail
-            make setup 2>&1 | tee {{ ansible_user_dir }}/zuul-output/logs/make_setup.log
-
-        - name: Start all services (podman-compose)
-          when: hotstack_deployment_method == 'podman-compose'
-          args:
-            chdir: "{{ hotstack_os_dir }}"
-            executable: /bin/bash
-          ansible.builtin.shell: |
-            set -o pipefail
-            make start 2>&1 | tee {{ ansible_user_dir }}/zuul-output/logs/make_start.log
-
         - name: Install and start systemd services
-          when: hotstack_deployment_method == 'systemd'
           args:
             chdir: "{{ hotstack_os_dir }}"
             executable: /bin/bash
@@ -110,15 +147,20 @@
             set -o pipefail
             make install 2>&1 | tee {{ ansible_user_dir }}/zuul-output/logs/make_install.log
 
-        - name: Wait for systemd services to be ready
-          when: hotstack_deployment_method == 'systemd'
+        - name: Enable and start systemd services
           ansible.builtin.systemd:
             name: hotstack-os.target
             state: started
-          register: systemd_status
-          until: systemd_status is succeeded
+            enabled: true
+
+        - name: Wait for all hotstack-os services to be active
+          ansible.builtin.command:
+            cmd: systemctl is-active hotstack-os.target
+          register: target_status
+          until: target_status.rc == 0
           retries: 60
           delay: 5
+          changed_when: false
 
     - name: Run post-setup to create project and upload images
       args:
