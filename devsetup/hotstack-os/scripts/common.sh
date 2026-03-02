@@ -24,7 +24,6 @@
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
-GREY='\033[0;90m'
 NC='\033[0m' # No Color
 
 # ============================================================================
@@ -39,17 +38,6 @@ CINDER_NFS_EXPORT_DIR=${CINDER_NFS_EXPORT_DIR:-${HOTSTACK_DATA_DIR}/cinder-nfs}
 CONFIGS_DIR="configs"
 CONFIGS_RUNTIME_DIR="${HOTSTACK_DATA_DIR}/runtime/config"
 SCRIPTS_RUNTIME_DIR="${HOTSTACK_DATA_DIR}/runtime/scripts"
-
-# Hosts file constants
-HOSTS_FILE="/etc/hosts"
-HOSTS_BACKUP="/etc/hosts.hotstack-backup"
-HOSTS_BEGIN_MARKER="# BEGIN hotstack-os managed entries"
-HOSTS_END_MARKER="# END hotstack-os managed entries"
-
-# NFS constants
-NFS_EXPORTS_FILE="/etc/exports"
-NFS_EXPORTS_BEGIN_MARKER="# BEGIN hotstack-os managed exports"
-NFS_EXPORTS_END_MARKER="# END hotstack-os managed exports"
 
 # ============================================================================
 # Environment Configuration
@@ -227,48 +215,6 @@ check_service() {
 # Wait for a URL to become available
 # Usage: wait_for_url <service_name> <url> [max_attempts]
 # Returns: 0 on success, 1 on timeout
-wait_for_url() {
-    local service_name=$1
-    local url=$2
-    local max_attempts=${3:-30}
-
-    echo "Waiting for $service_name to be ready..."
-    for i in $(seq 1 "$max_attempts"); do
-        # Get HTTP status code, accept 2xx and 3xx as success
-        local http_code
-        http_code=$(curl -s -o /dev/null -w "%{http_code}" "$url" 2>/dev/null || true)
-        if [[ "$http_code" =~ ^[23] ]]; then
-            echo -e "${GREEN}✓ $service_name is ready (HTTP $http_code)${NC}"
-            return 0
-        fi
-        echo -e "${GREY}Waiting for $service_name... ($i/$max_attempts)${NC}"
-        sleep 2
-    done
-    echo -e "${RED}✗ $service_name failed to start after $max_attempts attempts${NC}"
-    return 1
-}
-
-# Wait for a command to succeed
-# Usage: wait_for_command <service_name> <check_command> [max_attempts]
-# Returns: 0 on success, 1 on timeout
-wait_for_command() {
-    local service_name=$1
-    local check_command=$2
-    local max_attempts=${3:-30}
-
-    echo "Waiting for $service_name to be ready..."
-    for i in $(seq 1 "$max_attempts"); do
-        if eval "$check_command" &>/dev/null; then
-            echo -e "${GREEN}✓ $service_name is ready${NC}"
-            return 0
-        fi
-        echo -e "${GREY}Waiting for $service_name... ($i/$max_attempts)${NC}"
-        sleep 2
-    done
-    echo -e "${RED}✗ $service_name failed to start after $max_attempts attempts${NC}"
-    return 1
-}
-
 # Verify OpenStack CLI functionality
 # Usage: verify_openstack_cli
 # Returns: 0 if CLI works, 1 otherwise
@@ -300,27 +246,6 @@ verify_openstack_cli() {
     fi
 }
 
-# Wait for container to be running and stable
-# Usage: wait_for_container <service_name> <container_name> [max_attempts]
-# Returns: 0 on success, 1 on timeout
-wait_for_container() {
-    local service_name=$1
-    local container_name=$2
-    local max_attempts=${3:-15}
-
-    echo "Waiting for $service_name container to be running..."
-    for i in $(seq 1 "$max_attempts"); do
-        if podman inspect "$container_name" --format '{{.State.Status}}' 2>/dev/null | grep -q "running"; then
-            echo -e "${GREEN}✓${NC} $service_name is running"
-            return 0
-        fi
-        echo -e "${GREY}Waiting for $service_name... ($i/$max_attempts)${NC}"
-        sleep 2
-    done
-    echo -e "${RED}✗${NC} $service_name container failed to start"
-    return 1
-}
-
 # ============================================================================
 # System Services Functions
 # ============================================================================
@@ -345,78 +270,6 @@ setup_openvswitch_service() {
     if ! check_systemd_service openvswitch; then
         enable_start_service openvswitch || return 1
     fi
-    return 0
-}
-
-# Setup NFS exports for Cinder (without managing the service)
-# Usage: setup_nfs_exports
-setup_nfs_exports() {
-    echo "Setting up NFS exports for Cinder..."
-
-    # Create export directory
-    if ! setup_directory "$CINDER_NFS_EXPORT_DIR" "NFS export directory"; then
-        return 1
-    fi
-
-    # Set permissions: root:root with 0755 (standard for NFS exports)
-    chown root:root "$CINDER_NFS_EXPORT_DIR"
-    chmod 0755 "$CINDER_NFS_EXPORT_DIR"
-
-    # Configure /etc/exports
-    echo -n "Configuring NFS exports... "
-    local export_line="$CINDER_NFS_EXPORT_DIR 127.0.0.1(rw,sync,no_root_squash,no_subtree_check)"
-
-    # Check if already configured (look for marker)
-    if grep -q "$NFS_EXPORTS_BEGIN_MARKER" "$NFS_EXPORTS_FILE" 2>/dev/null; then
-        echo -e "${GREEN}✓${NC} (already configured)"
-    else
-        # Add managed section with markers
-        {
-            echo ""
-            echo "$NFS_EXPORTS_BEGIN_MARKER"
-            echo "$export_line"
-            echo "$NFS_EXPORTS_END_MARKER"
-        } >> "$NFS_EXPORTS_FILE"
-        echo -e "${GREEN}✓${NC}"
-    fi
-
-    # Export the shares
-    echo -n "Exporting NFS shares... "
-    if exportfs -ra; then
-        echo -e "${GREEN}✓${NC}"
-    else
-        echo -e "${RED}✗${NC}"
-        return 1
-    fi
-
-    # Verify NFS export is accessible
-    echo -n "Verifying NFS export... "
-    if showmount -e 127.0.0.1 2>/dev/null | grep -q "$CINDER_NFS_EXPORT_DIR"; then
-        echo -e "${GREEN}✓${NC}"
-    else
-        echo -e "${RED}✗${NC}"
-        echo "NFS export verification failed - showmount output:"
-        showmount -e 127.0.0.1 2>&1 | sed 's/^/  /'
-        return 1
-    fi
-
-    echo -e "${GREEN}✓${NC} NFS server configured for Cinder"
-    echo "  Export: $CINDER_NFS_EXPORT_DIR → 127.0.0.1"
-    return 0
-}
-
-# Cleanup NFS exports for Cinder
-# Usage: cleanup_nfs_exports
-cleanup_nfs_exports() {
-    # Remove managed section from /etc/exports
-    if [ -f "$NFS_EXPORTS_FILE" ] && grep -q "$NFS_EXPORTS_BEGIN_MARKER" "$NFS_EXPORTS_FILE" 2>/dev/null; then
-        # Remove everything between markers (inclusive)
-        sed -i "/$NFS_EXPORTS_BEGIN_MARKER/,/$NFS_EXPORTS_END_MARKER/d" "$NFS_EXPORTS_FILE"
-        # Remove any blank lines that were left before the marker
-        sed -i '${/^$/d;}' "$NFS_EXPORTS_FILE"
-        exportfs -ra 2>/dev/null || true
-    fi
-
     return 0
 }
 
@@ -565,33 +418,6 @@ command_exists() {
 # Check if podman networks use 172.31.0.0/24
 # Usage: check_podman_network_conflicts
 # Returns: 0 if conflict found, 1 if clear
-check_podman_network_conflicts() {
-    if command -v podman &>/dev/null; then
-        if podman network ls --format "{{.Name}} {{.Subnets}}" 2>/dev/null | grep -q "172.31.0"; then
-            echo  # Newline to break from "Checking network availability... "
-            echo -e "${YELLOW}⚠${NC} 172.31.0.0/24 address space may already be in use by podman"
-            echo "  Existing networks using this range:"
-            podman network ls --format "table {{.Name}}\t{{.Subnets}}" 2>/dev/null | grep "172.31.0" | sed 's/^/  /'
-            return 0
-        fi
-    fi
-    return 1
-}
-
-# Check if host has IPs assigned in 172.31.0.0/24
-# Usage: check_host_ip_conflicts
-# Returns: 0 if conflict found, 1 if clear
-check_host_ip_conflicts() {
-    # Exclude hotstack-os interfaces (hot-ex, hot-int)
-    if ip addr show 2>/dev/null | grep "172.31.0" | grep -v -E "(hot-ex|hot-int)" >/dev/null; then
-        echo  # Newline if this is the first message
-        echo -e "${YELLOW}⚠${NC} IPs in 172.31.0.0/24 range already assigned on this host"
-        echo "  Another network may be using the 172.31.0.0/24 range"
-        return 0
-    fi
-    return 1
-}
-
 # ============================================================================
 # Error Tracking
 # ============================================================================
@@ -693,27 +519,6 @@ build_service_images() {
 # Get upstream DNS servers from /etc/resolv.conf
 # Usage: get_upstream_dns_servers
 # Returns: Space-separated list of "server=IP" entries for dnsmasq config
-get_upstream_dns_servers() {
-    grep '^nameserver' /etc/resolv.conf 2>/dev/null | awk '{print "server="$2}' | tr '\n' '\n' || echo "server=8.8.8.8"
-}
-
-# Prepare runtime configuration directory
-# Usage: prepare_runtime_configs [extra_directories...]
-# Example: prepare_runtime_configs "keystone/fernet-keys" "keystone/credential-keys"
-prepare_runtime_configs() {
-    echo -n "Preparing runtime configs... "
-    rm -rf "$CONFIGS_RUNTIME_DIR"
-    mkdir -p "$CONFIGS_RUNTIME_DIR"
-    cp -r "$CONFIGS_DIR"/* "$CONFIGS_RUNTIME_DIR"/
-
-    # Create any extra directories requested
-    for dir in "$@"; do
-        mkdir -p "$CONFIGS_RUNTIME_DIR/$dir"
-    done
-
-    echo -e "${GREEN}✓${NC}"
-}
-
 # Process multiple config files in-place with variable substitution
 # Usage: process_config_files <directory> <description> [VAR VALUE] ...
 # Example: process_config_files "configs-runtime" "service configs" "DB_PASSWORD" "$DB_PASSWORD" "REGION" "$REGION"
@@ -730,6 +535,29 @@ process_config_files() {
         echo -e "${RED}✗${NC}"
         return 1
     fi
+
+    echo -e "${GREEN}✓${NC}"
+}
+
+# Get upstream DNS servers from /etc/resolv.conf
+# Usage: upstream_dns=$(get_upstream_dns_servers)
+get_upstream_dns_servers() {
+    grep '^nameserver' /etc/resolv.conf 2>/dev/null | awk '{print "server="$2}' | tr '\n' '\n' || echo "server=8.8.8.8"
+}
+
+# Prepare runtime configuration directory structure
+# Usage: prepare_runtime_configs [extra_dirs...]
+# Example: prepare_runtime_configs "keystone/fernet-keys" "keystone/credential-keys"
+prepare_runtime_configs() {
+    echo -n "Preparing runtime configs... "
+    rm -rf "$CONFIGS_RUNTIME_DIR"
+    mkdir -p "$CONFIGS_RUNTIME_DIR"
+    cp -r "$CONFIGS_DIR"/* "$CONFIGS_RUNTIME_DIR"/
+
+    # Create any extra directories requested
+    for dir in "$@"; do
+        mkdir -p "$CONFIGS_RUNTIME_DIR/$dir"
+    done
 
     echo -e "${GREEN}✓${NC}"
 }
@@ -812,204 +640,6 @@ prepare_all_configs() {
 # Add OpenStack service entries to /etc/hosts
 # Usage: add_hosts_entries
 # Requires: BREX_IP environment variable
-add_hosts_entries() {
-    echo "Configuring /etc/hosts for OpenStack service access..."
-
-    # Create backup if it doesn't exist
-    if [ ! -f "$HOSTS_BACKUP" ]; then
-        cp "$HOSTS_FILE" "$HOSTS_BACKUP"
-        echo "  Created backup: $HOSTS_BACKUP"
-    fi
-
-    # Remove old hotstack-os entries if they exist
-    if grep -q "$HOSTS_BEGIN_MARKER" "$HOSTS_FILE"; then
-        echo "  Removing old hotstack-os entries..."
-        sed -i "/$HOSTS_BEGIN_MARKER/,/$HOSTS_END_MARKER/d" "$HOSTS_FILE"
-    fi
-
-    # Add new entries
-    echo "  Adding hotstack-os service entries for $BREX_IP..."
-    cat >> "$HOSTS_FILE" <<EOF
-$HOSTS_BEGIN_MARKER
-$BREX_IP keystone.hotstack-os.local
-$BREX_IP glance.hotstack-os.local
-$BREX_IP placement.hotstack-os.local
-$BREX_IP nova.hotstack-os.local
-$BREX_IP neutron.hotstack-os.local
-$BREX_IP cinder.hotstack-os.local
-$BREX_IP heat.hotstack-os.local
-$HOSTS_END_MARKER
-EOF
-
-    echo -e "  ${GREEN}✓${NC} /etc/hosts updated with OpenStack service FQDNs"
-    return 0
-}
-
-# Remove hotstack-os entries from /etc/hosts
-# Usage: remove_hosts_entries
-remove_hosts_entries() {
-    if grep -q "$HOSTS_BEGIN_MARKER" "$HOSTS_FILE" 2>/dev/null; then
-        sed -i "/$HOSTS_BEGIN_MARKER/,/$HOSTS_END_MARKER/d" "$HOSTS_FILE" || true
-    fi
-    return 0
-}
-
-# ============================================================================
-# Network Infrastructure Functions
-# ============================================================================
-
-# Create and configure OVS bridges
-# Usage: add_ovs_bridges
-# Requires: PROVIDER_NETWORK environment variable
-add_ovs_bridges() {
-    echo "Checking OpenvSwitch configuration..."
-    if ! ovs-vsctl show &>/dev/null; then
-        echo -e "${RED}✗${NC} OVS is not functional"
-        return 1
-    fi
-    echo -e "${GREEN}✓${NC} OVS is functional"
-
-    # Create hot-int bridge if it doesn't exist
-    if ovs-vsctl br-exists hot-int; then
-        echo -e "${GREEN}✓${NC} hot-int bridge exists"
-    else
-        echo -e "${YELLOW}⚠${NC} hot-int bridge does not exist, creating..."
-        ovs-vsctl add-br hot-int
-        echo -e "${GREEN}✓${NC} hot-int bridge created"
-    fi
-
-    # Create hot-ex bridge if it doesn't exist
-    echo ""
-    echo "Setting up hot-ex (external bridge) for provider networks..."
-    if ovs-vsctl br-exists hot-ex; then
-        echo -e "${GREEN}✓${NC} hot-ex bridge exists"
-    else
-        echo -e "${YELLOW}⚠${NC} hot-ex bridge does not exist, creating..."
-        ovs-vsctl add-br hot-ex
-        echo -e "${GREEN}✓${NC} hot-ex bridge created"
-    fi
-
-    # Assign IP to hot-ex bridge internal interface for host connectivity
-    # The bridge's internal interface acts as the gateway for the provider network
-    # and allows the host to communicate with VMs and services on hot-ex
-    if ip addr show hot-ex | grep -q "$BREX_IP"; then
-        echo -e "${GREEN}✓${NC} hot-ex already has IP $BREX_IP configured"
-    else
-        ip addr add "${BREX_IP}"/25 dev hot-ex
-        ip link set hot-ex up
-        echo -e "${GREEN}✓${NC} Assigned IP $BREX_IP to hot-ex bridge"
-    fi
-
-    echo -e "${GREEN}✓${NC} hot-ex configured for provider networks ($PROVIDER_NETWORK)"
-    return 0
-}
-
-
-# Remove Open vSwitch bridges
-# Usage: remove_ovs_bridges
-remove_ovs_bridges() {
-    if systemctl is-active --quiet openvswitch; then
-        if ovs-vsctl br-exists hot-ex 2>/dev/null; then
-            ovs-vsctl del-br hot-ex 2>/dev/null || true
-        fi
-        if ovs-vsctl br-exists hot-int 2>/dev/null; then
-            ovs-vsctl del-br hot-int 2>/dev/null || true
-        fi
-    fi
-    return 0
-}
-
-# ============================================================================
-# Firewall Functions
-# ============================================================================
-
-# Configure firewall zones for HotStack-OS networks
-# Usage: add_firewall_zones
-# Requires: CONTAINER_NETWORK, PROVIDER_NETWORK environment variables
-add_firewall_zones() {
-    if ! systemctl is-active --quiet firewalld; then
-        echo -e "${YELLOW}⚠${NC} Firewalld not running - skipping firewall configuration"
-        return 0
-    fi
-
-    echo "Configuring firewall for HotStack-OS networks..."
-
-    # Step 1: Create firewall zones
-    local ZONES_CREATED=0
-
-    if ! firewall-cmd --get-zones | grep -qw hotstack-os; then
-        firewall-cmd --permanent --new-zone=hotstack-os >/dev/null
-        echo "  Created zone: hotstack-os (container network)"
-        ZONES_CREATED=1
-    else
-        echo "  Zone already exists: hotstack-os (container network)"
-    fi
-
-    if ! firewall-cmd --get-zones | grep -qw hotstack-external; then
-        firewall-cmd --permanent --new-zone=hotstack-external >/dev/null
-        echo "  Created zone: hotstack-external (provider network)"
-        ZONES_CREATED=1
-    else
-        echo "  Zone already exists: hotstack-external (provider network)"
-    fi
-
-    # Reload firewalld if new zones were created (needed before configuring them)
-    if [ $ZONES_CREATED -eq 1 ]; then
-        firewall-cmd --reload >/dev/null
-        echo "  Reloaded firewalld to activate new zones"
-    fi
-
-    # Step 2: Add network sources to zones
-    firewall-cmd --permanent --zone=hotstack-os --add-source="$CONTAINER_NETWORK" &>/dev/null || true
-    firewall-cmd --permanent --zone=hotstack-external --add-source="$PROVIDER_NETWORK" &>/dev/null || true
-
-    # Step 3: Set zone targets to ACCEPT
-    firewall-cmd --permanent --zone=hotstack-os --set-target=ACCEPT &>/dev/null || true
-    firewall-cmd --permanent --zone=hotstack-external --set-target=ACCEPT &>/dev/null || true
-
-    firewall-cmd --reload >/dev/null
-    echo -e "  ${GREEN}✓${NC} Firewall zone: hotstack-os configured (sources: $CONTAINER_NETWORK, target: ACCEPT)"
-    echo -e "  ${GREEN}✓${NC} Firewall zone: hotstack-external configured (sources: $PROVIDER_NETWORK, target: ACCEPT)"
-    return 0
-}
-
-# Remove hotstack firewall zones
-# Usage: remove_firewall_zones
-remove_firewall_zones() {
-    if systemctl is-active --quiet firewalld; then
-        local ZONES_REMOVED=0
-        firewall-cmd --get-zones 2>/dev/null | grep -qw hotstack-os && {
-            firewall-cmd --permanent --delete-zone=hotstack-os &>/dev/null || true
-            ZONES_REMOVED=1
-        }
-        if firewall-cmd --get-zones 2>/dev/null | grep -qw hotstack-external; then
-            firewall-cmd --permanent --delete-zone=hotstack-external &>/dev/null || true
-            ZONES_REMOVED=1
-        fi
-        if [ $ZONES_REMOVED -eq 1 ]; then
-            firewall-cmd --reload &>/dev/null || true
-        fi
-    fi
-    return 0
-}
-
-# ============================================================================
-# Storage Cleanup
-# ============================================================================
-
-# Clean up storage backend state (NFS mounts, etc.)
-# Usage: cleanup_storage_state
-# Returns: 0 on success
-cleanup_storage_state() {
-    # Unmount NFS shares if mounted (force unmount to handle stale mounts)
-    if mountpoint -q "$CINDER_NFS_EXPORT_DIR" 2>/dev/null; then
-        echo "  Unmounting NFS export at $CINDER_NFS_EXPORT_DIR..." >&2
-        umount -f "$CINDER_NFS_EXPORT_DIR" 2>/dev/null || true
-    fi
-
-    return 0
-}
-
 # ============================================================================
 # Libvirt VM Cleanup
 # ============================================================================
@@ -1041,42 +671,6 @@ remove_libvirt_vms() {
 # Remove network namespaces created by Neutron/OVN
 # Usage: remove_network_namespaces
 # Returns: 0 on success, 1 if ip command not available
-remove_network_namespaces() {
-    if ! command -v ip &> /dev/null; then
-        return 1
-    fi
-
-    # Remove OVN metadata agent network namespaces (netns-*)
-    # These are created by Neutron/OVN for each network's metadata proxy
-    for ns in $(ip netns list 2>/dev/null | grep -oE "^netns-[0-9a-f-]+" || true); do
-        ip netns delete "$ns" 2>/dev/null || true
-    done
-    return 0
-}
-
-# ============================================================================
-# OpenStack Client Configuration
-# ============================================================================
-
-# Set up OpenStack admin credentials for CLI operations
-# This function exports the necessary environment variables for OpenStack
-# client commands to authenticate as the admin user.
-#
-# Prerequisites:
-#   - KEYSTONE_ADMIN_PASSWORD must be set in the environment
-#
-# Usage:
-#   setup_os_admin_credentials
-setup_os_admin_credentials() {
-    export OS_USERNAME=admin
-    export OS_PASSWORD=${KEYSTONE_ADMIN_PASSWORD}
-    export OS_PROJECT_NAME=admin
-    export OS_USER_DOMAIN_NAME=Default
-    export OS_PROJECT_DOMAIN_NAME=Default
-    export OS_AUTH_URL=http://keystone:5000/v3
-    export OS_IDENTITY_API_VERSION=3
-}
-
 # ============================================================================
 # Auto-initialization
 # ============================================================================

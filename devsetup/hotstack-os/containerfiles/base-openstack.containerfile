@@ -54,6 +54,11 @@ RUN apt-get update && \
         default-mysql-client \
         libjemalloc2 \
         procps \
+        sudo \
+        ebtables \
+        dnsmasq \
+        qemu-utils \
+        nfs-common \
     && rm -rf /var/lib/apt/lists/*
 
 # Use jemalloc for better memory management

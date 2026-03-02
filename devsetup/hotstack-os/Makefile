@@ -1,4 +1,4 @@
-.PHONY: help setup build config start stop restart clean status post-setup logs install-client smoke-test smoke-test-cleanup install-deps install uninstall
+.PHONY: help build config clean post-setup install-client smoke-test smoke-test-cleanup install-deps install uninstall status
 
 # Default data directory (can be overridden via environment variable or .env file)
 export HOTSTACK_DATA_DIR ?= /var/lib/hotstack-os
@@ -19,37 +19,22 @@ endef
 help:
 	@echo "HotStack-OS Makefile Commands:"
 	@echo ""
-	@echo "Dependencies:"
+	@echo "Setup:"
 	@echo "  sudo make install-deps        - Install system dependencies (packages and services)"
-	@echo "  sudo make install-client      - Install OpenStack client packages on host (optional)"
-	@echo ""
-	@echo "Podman-Compose Deployment:"
-	@echo "  sudo make setup               - Setup host for podman-compose (includes install-deps)"
 	@echo "  sudo make build               - Build all container images"
-	@echo "  sudo make config              - Prepare runtime configuration files"
-	@echo "  sudo make start               - Start all services (includes config)"
-	@echo "  sudo make stop                - Stop all services"
-	@echo "  sudo make restart             - Restart all services"
-	@echo "  sudo make clean               - Complete reset: stop containers, remove all data, NFS, and host setup"
+	@echo "  sudo make install             - Install HotStack-OS as systemd services"
 	@echo ""
-	@echo "Systemd Deployment:"
-	@echo "  sudo make install             - Install HotStack-OS as systemd services (requires: install-deps, build)"
-	@echo "  sudo make uninstall           - Remove systemd services and cleanup"
+	@echo "Post-Installation:"
+	@echo "  sudo make install-client      - Install OpenStack client packages on host (optional)"
+	@echo "  make post-setup               - Create hotstack project/user, resources, and images (no sudo)"
+	@echo "  make smoke-test               - Run smoke test with Heat stack validation (no sudo)"
 	@echo ""
-	@echo "Operations:"
+	@echo "Management:"
 	@echo "  sudo make status              - Check status of all services"
-	@echo "  make post-setup               - Create hotstack project/user, resources, and download/upload images (no sudo required)"
-	@echo "  sudo make logs                - View logs from all services"
+	@echo "  sudo make uninstall           - Remove systemd services"
+	@echo "  sudo make clean               - Complete data cleanup (run after uninstall)"
 	@echo ""
-	@echo "Testing:"
-	@echo "  make smoke-test               - Run smoke test with Heat stack validation (no sudo required)"
-	@echo "  make smoke-test-cleanup       - Cleanup smoke test resources (no sudo required)"
-	@echo ""
-	@echo "Note: Most commands require root privileges. Run with sudo or you'll see an error message."
-
-setup: install-deps
-	$(call require-root,setup)
-	@./scripts/setup-host.sh
+	@echo "Note: Use systemctl to manage services (start/stop/restart/logs)"
 
 build:
 	$(call require-root,build)
@@ -58,22 +43,6 @@ build:
 config:
 	$(call require-root,config)
 	@./scripts/config.sh
-
-start: config
-	$(call require-root,start)
-	@./scripts/start.sh
-	@echo "Services starting... run 'make status' to check status"
-
-stop:
-	$(call require-root,stop)
-	@echo "Stopping all services..."
-	podman-compose stop
-	podman-compose down --remove-orphans
-
-restart:
-	$(call require-root,restart)
-	@$(MAKE) stop
-	@$(MAKE) start
 
 status:
 	$(call require-root,status)
@@ -116,21 +85,17 @@ post-setup:
 	@echo ""
 	./scripts/post-setup.py
 
-logs:
-	$(call require-root,logs)
-	podman-compose logs -f
-
 clean:
 	$(call require-root,clean)
 	@echo ""
-	@echo -e "\033[0;31mWARNING: Complete system reset\033[0m"
+	@echo -e "\033[0;31mWARNING: Complete data cleanup\033[0m"
 	@echo "This will remove:"
-	@echo "  • All containers and volumes"
+	@echo "  • All container images"
 	@echo "  • All data (databases, images, VMs, logs)"
 	@echo -e "  • \033[1;33mAll libvirt VMs matching pattern 'notapet-<uuid>'\033[0m"
-	@echo -e "  • \033[1;33mAll network namespaces (netns-*)\033[0m"
-	@echo "  • Cinder NFS exports and data"
-	@echo "  • Host network infrastructure (OVS bridges, etc.)"
+	@echo "  • Podman network and volumes"
+	@echo ""
+	@echo "Run 'sudo make uninstall' first to stop and remove systemd services."
 	@echo ""
 	@if [ -z "$$HOTSTACK_CLEANUP_CONFIRM" ]; then \
 		read -p "Proceed with complete cleanup? [y/N] " -n 1 -r; \

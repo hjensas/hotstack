@@ -37,6 +37,4 @@ build_base_runtime_image || exit 1
 build_service_images || exit 1
 
 echo -e "\n${GREEN}Build complete!${NC}"
-echo -e "Next steps:"
-echo -e "  Podman-Compose: sudo make setup && sudo make start"
-echo -e "  Systemd:        sudo make install"
+echo -e "Next step: sudo make install"

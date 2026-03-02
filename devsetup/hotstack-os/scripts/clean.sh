@@ -13,7 +13,7 @@
 # WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 # License for the specific language governing permissions and limitations
 # under the License.
-# Complete cleanup: containers, data, NFS, and host infrastructure
+# Complete data cleanup: images, data, and VMs
 
 set -e
 
@@ -33,52 +33,31 @@ if [ -f .env ]; then
     source .env
 fi
 
-# Constants are now defined in common.sh
-
-echo -e "${RED}=== Complete system cleanup ===${NC}"
+echo -e "${RED}=== Complete data cleanup ===${NC}"
 echo ""
 
-echo "Stopping containers..."
-podman-compose down -v || true
-echo -e "All containers stopped ${GREEN}✓${NC}"
+echo -n "Removing container images... "
+# shellcheck disable=SC2046
+podman rmi -f $(podman images -q --filter "reference=localhost/hotstack-os-*" 2>/dev/null) 2>/dev/null || true
+echo -e "${GREEN}✓${NC}"
 
 echo -n "Cleaning libvirt VMs... "
 remove_libvirt_vms 2>/dev/null && echo -e "${GREEN}✓${NC}" || echo -e "${YELLOW}⚠${NC}"
 
-echo -n "Cleaning network namespaces... "
-remove_network_namespaces 2>/dev/null && echo -e "${GREEN}✓${NC}" || echo -e "${YELLOW}⚠${NC}"
+echo -n "Removing podman network... "
+podman network rm hotstack-os-network 2>/dev/null || true
+echo -e "${GREEN}✓${NC}"
 
-echo -n "Cleaning storage state... "
-cleanup_storage_state 2>/dev/null && echo -e "${GREEN}✓${NC}" || echo -e "${YELLOW}⚠${NC}"
-
-echo -n "Cleaning NFS exports... "
-cleanup_nfs_exports 2>/dev/null && echo -e "${GREEN}✓${NC}" || echo -e "${YELLOW}⚠${NC}"
+echo -n "Removing podman volumes... "
+podman volume rm hotstack-os-mariadb hotstack-os-rabbitmq hotstack-os-ovn 2>/dev/null || true
+echo -e "${GREEN}✓${NC}"
 
 echo -n "Cleaning data directories... "
 if [ -d "$HOTSTACK_DATA_DIR" ]; then
     find "$HOTSTACK_DATA_DIR" -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null || true
 fi
 rm -f clouds.yaml 2>/dev/null || true
-rm -rf /run/ovn/* 2>/dev/null || true
-# Clean Nova instances directory (only if using default path under HOTSTACK_DATA_DIR)
-if [[ "$NOVA_INSTANCES_PATH" == "${HOTSTACK_DATA_DIR}"* ]] && [ -d "$NOVA_INSTANCES_PATH" ]; then
-    find "${NOVA_INSTANCES_PATH:?}" -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null || true
-fi
-# Clean Nova NFS mount directory (only if using default path under HOTSTACK_DATA_DIR)
-if [[ "$NOVA_NFS_MOUNT_POINT_BASE" == "${HOTSTACK_DATA_DIR}"* ]] && [ -d "$NOVA_NFS_MOUNT_POINT_BASE" ]; then
-    find "$NOVA_NFS_MOUNT_POINT_BASE" -mindepth 1 -maxdepth 1 -exec umount -f {} \; 2>/dev/null || true
-    find "$NOVA_NFS_MOUNT_POINT_BASE" -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null || true
-fi
 echo -e "${GREEN}✓${NC}"
 
-echo -n "Removing OVS bridges... "
-remove_ovs_bridges 2>/dev/null && echo -e "${GREEN}✓${NC}" || echo -e "${YELLOW}⚠${NC}"
-
-echo -n "Removing /etc/hosts entries... "
-remove_hosts_entries 2>/dev/null && echo -e "${GREEN}✓${NC}" || echo -e "${YELLOW}⚠${NC}"
-
-echo -n "Removing firewall zones... "
-remove_firewall_zones 2>/dev/null && echo -e "${GREEN}✓${NC}" || echo -e "${YELLOW}⚠${NC}"
-
 echo ""
-echo -e "${GREEN}Complete!${NC} To rebuild: sudo make build && sudo make setup && sudo make start"
+echo -e "${GREEN}Complete!${NC} To rebuild: sudo make build && sudo make install"
