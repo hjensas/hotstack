@@ -333,6 +333,39 @@ getenforce
 sudo ausearch -m avc -ts recent | tail -20
 ```
 
+## Build Performance Optimization
+
+### APT Package Caching
+
+If you're rebuilding frequently, you can speed up builds by caching Debian packages with apt-cacher-ng.
+
+**Setup:**
+```bash
+# Install apt-cacher-ng
+sudo dnf install -y apt-cacher-ng
+sudo systemctl start apt-cacher-ng
+sudo systemctl enable apt-cacher-ng
+
+# Configure in .env (use host.containers.internal to reach host from container)
+echo "APT_PROXY=http://host.containers.internal:3142" >> .env
+
+# Build (first time populates cache)
+sudo make build
+```
+
+**Benefits:**
+- Caches all `.deb` files from `deb.debian.org`
+- Shared cache across all containers during build
+- First build: normal speed, populates cache
+- Subsequent builds: 20-30% faster for apt operations
+
+**Verify it's working:**
+```bash
+# Watch cache activity during build (in another terminal)
+sudo tail -f /var/log/apt-cacher-ng/apt-cacher.log | grep MISS  # First build
+sudo tail -f /var/log/apt-cacher-ng/apt-cacher.log | grep HIT   # Subsequent builds
+```
+
 ## Common Quick Fixes
 
 | Issue | Quick Fix |

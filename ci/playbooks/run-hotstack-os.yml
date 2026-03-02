@@ -18,7 +18,15 @@
           - podman
           - podman-compose
           - make
+          - apt-cacher-ng
         state: present
+
+    - name: Start and enable apt-cacher-ng service
+      become: true
+      ansible.builtin.systemd:
+        name: apt-cacher-ng
+        state: started
+        enabled: true
 
     - name: Generate SSH keypair for smoke test
       ansible.builtin.command:
@@ -30,6 +38,26 @@
         path: "{{ ansible_user_dir }}/zuul-output/logs"
         state: directory
         mode: '0755'
+
+    - name: Copy .env.example to .env if not exists
+      ansible.builtin.copy:
+        src: "{{ hotstack_os_dir }}/.env.example"
+        dest: "{{ hotstack_os_dir }}/.env"
+        remote_src: true
+        force: false
+        mode: '0644'
+
+    - name: Configure APT_PROXY for CI build
+      ansible.builtin.lineinfile:
+        path: "{{ hotstack_os_dir }}/.env"
+        regexp: '^APT_PROXY='
+        line: 'APT_PROXY=http://host.containers.internal:3142'
+
+    - name: Configure BUILD_PARALLEL for CI build
+      ansible.builtin.lineinfile:
+        path: "{{ hotstack_os_dir }}/.env"
+        regexp: '^BUILD_PARALLEL='
+        line: 'BUILD_PARALLEL=4'
 
     - name: Build, setup, and start hotstack-os services
       become: true
