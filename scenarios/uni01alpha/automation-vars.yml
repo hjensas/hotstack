@@ -35,19 +35,197 @@ stages:
                "common/stages/olm-openstack-stages.yaml.j2")
       }}
 
-  - name: Control Plane (NNCP and OpenStackControlPlane)
+  - name: Clone Architecture Repository
+    documentation: |
+      Clone the openstack-k8s-operators/architecture repository to $HOME/manifests/architecture.
+      This allows us to reference it as a local resource and patch values files
+      before Kustomize component processing. The location matches where hotloop copies
+      kustomize directories, so relative paths work correctly.
+    shell: |
+      rm -rf $HOME/manifests/architecture
+      git clone --depth 1 --branch main \
+        https://github.com/openstack-k8s-operators/architecture.git \
+        $HOME/manifests/architecture
+
+  - name: Patch Network Values
+    documentation: |
+      Patch the network-values ConfigMap with hotstack-specific interface names
+      and MTU settings. These values are used by multiple component replacements
+      throughout the architecture repo (NNCP, control plane, networking, etc.).
+
+      Changes:
+      - Interface names: enp7s0 -> eth1, enp8s0 -> eth2
+      - MTU: 1500 -> 1442
+      - Storage class: local-storage -> lvms-local-storage
+    shell: |
+      yq eval -i '
+        .data.ctlplane.iface = "eth1" |
+        .data.ctlplane.mtu = 1442 |
+        .data.internalapi.base_iface = "eth1" |
+        .data.internalapi.mtu = 1442 |
+        .data.storage.base_iface = "eth1" |
+        .data.storage.mtu = 1442 |
+        .data.tenant.base_iface = "eth1" |
+        .data.tenant.mtu = 1442 |
+        .data.octavia.base_iface = "eth1" |
+        .data.octavia.mtu = 1442 |
+        .data.ironic.base_iface = "eth2" |
+        .data.ironic.mtu = 1442 |
+        .data.storageClass = "lvms-local-storage"
+      ' $HOME/manifests/architecture/examples/dt/uni01alpha/control-plane/networking/nncp/values.yaml
+
+  - name: Disable NNCP DNS Replacement
+    documentation: |
+      Remove the DNS replacement from the NNCP component to prevent NMState
+      from trying to configure DNS, which causes reconciliation failures.
+
+      The DNS configuration remains in network-values for use by the control
+      plane DNS component, but won't be applied to NodeNetworkConfigurationPolicy
+      resources.
+    shell: |
+      yq eval -i 'del(.replacements[] | select(.source.fieldPath == "data.dns-resolver.config"))' \
+        $HOME/manifests/architecture/lib/nncp/kustomization.yaml
+
+  - name: Patch Service Values
+    documentation: |
+      Patch the service-values ConfigMap with hotstack-specific settings.
+
+      Changes:
+      - Storage class: local-storage -> lvms-local-storage
+      - Neutron service_plugins: Remove taas and tapmirror (not in image)
+    shell: |
+      yq eval -i '.data.storageClass = "lvms-local-storage"' \
+        $HOME/manifests/architecture/examples/dt/uni01alpha/control-plane/service-values.yaml
+
+      yq eval -i '
+        .data.neutron.customServiceConfig |=
+        sub("service_plugins = qos,ovn-router,trunk,segments,log,taas,tapmirror";
+            "service_plugins = qos,ovn-router,trunk,segments,log")
+      ' $HOME/manifests/architecture/examples/dt/uni01alpha/control-plane/service-values.yaml
+
+  - name: Patch Base OpenStackControlPlane for Ironic
+    documentation: |
+      Add missing secret configuration to ironicNeutronAgent in the base
+      OpenStackControlPlane resource.
+
+      BUG in openstack-k8s-operators/architecture or ironic-operator: The base
+      OpenStackControlPlane is missing ironicNeutronAgent.secret configuration,
+      causing the operator to fail with "Secret \"\" not found" errors. All other
+      Ironic components (API, Conductor, Inspector) have secret configured, but
+      ironicNeutronAgent does not - so might be ironic-operator bug.
+
+      This is NOT addressed by ci-framework templates either (uni01alpha only
+      generates network-values, not service-values or control plane patches).
+
+      This should be reported as a bug in the architecture repository.
+    shell: |
+      yq eval -i '.spec.ironic.template.ironicNeutronAgent.secret = "osp-secret"' \
+        $HOME/manifests/architecture/lib/control-plane/base/openstackcontrolplane.yaml
+
+  - name: Remove SSH Secrets from Dataplane Nodeset Components
+    documentation: |
+      Remove SSH secret templates from the nodeset components since we create
+      them manually with oc create secret (as documented by Red Hat).
+
+      Red Hat's official RHOSO documentation specifies creating SSH secrets with
+      'oc create secret' commands BEFORE creating nodesets:
+      https://docs.redhat.com/en/documentation/red_hat_openstack_services_on_openshift/18.0/html/deploying_a_rhoso_environment_with_distributed_zones/assembly_creating-the-distributed-data-plane#proc_creating-the-data-plane-secrets_distributed-data-plane
+
+      The architecture repo's approach (including placeholder secrets in Kustomize)
+      is is different from what is documented by Red Hat.
+
+      Secrets removed:
+      - dataplane-ansible-ssh-private-key-secret (dataplane SSH)
+      - nova-migration-ssh-key (Nova migration)
+    shell: |
+      yq eval -i 'del(.resources[] | select(. == "dataplane-ssh-secret.yaml"))' \
+        $HOME/manifests/architecture/lib/dataplane/nodeset/kustomization.yaml
+
+      yq eval -i 'del(.resources[] | select(. == "dataplane-ssh-secret.yaml"))' \
+        $HOME/manifests/architecture/lib/dataplane/networker-nodeset/kustomization.yaml
+
+      yq eval -i 'del(.resources[] | select(. == "nova-migration-ssh-secret.yaml"))' \
+        $HOME/manifests/architecture/lib/dataplane/nodeset/kustomization.yaml
+
+  - name: Label master-0 for cinder-lvm
+    documentation: |
+      Apply cinder-lvm label on master-0 node as required by the architecture
+      control plane configuration.
+    shell: |
+      oc label node master-0 openstack.org/cinder-lvm="" --overwrite
+
+  - name: NNCP (Node Network Configuration)
+    documentation: |
+      Apply Node Network Configuration Policies using the patched architecture repo.
+      The values.yaml file has been modified with hotstack-specific interface names
+      (eth1/eth2) and MTU (1442).
     kustomize:
-      directory: scenarios/uni01alpha/kustomize/control-plane
+      directory: ~/manifests/architecture/examples/dt/uni01alpha/control-plane/networking/nncp
+      remote_src: true
     wait_conditions:
       - >-
         oc wait -n openstack nncp -l osp/nncm-config-type=standard
         --for jsonpath='{.status.conditions[0].reason}'=SuccessfullyConfigured
         --timeout=180s
+
+  - name: Networking (MetalLB and NADs)
+    documentation: |
+      Apply MetalLB IPAddressPools, L2Advertisements, and NetworkAttachmentDefinitions
+      using the patched architecture repo.
+    kustomize:
+      directory: ~/manifests/architecture/examples/dt/uni01alpha/control-plane/networking
+      remote_src: true
+    wait_conditions:
+      - >-
+        oc wait -n metallb-system ipaddresspool ctlplane
+        --for jsonpath='{.metadata.name}' --timeout=60s
+      - >-
+        oc wait -n metallb-system ipaddresspool internalapi
+        --for jsonpath='{.metadata.name}' --timeout=60s
+      - >-
+        oc wait -n metallb-system ipaddresspool storage
+        --for jsonpath='{.metadata.name}' --timeout=60s
+      - >-
+        oc wait -n metallb-system ipaddresspool tenant
+        --for jsonpath='{.metadata.name}' --timeout=60s
+      - >-
+        oc wait -n openstack network-attachment-definitions.k8s.cni.cncf.io ctlplane
+        --for jsonpath='{.metadata.name}' --timeout=60s
+      - >-
+        oc wait -n openstack network-attachment-definitions.k8s.cni.cncf.io internalapi
+        --for jsonpath='{.metadata.name}' --timeout=60s
+      - >-
+        oc wait -n openstack network-attachment-definitions.k8s.cni.cncf.io storage
+        --for jsonpath='{.metadata.name}' --timeout=60s
+      - >-
+        oc wait -n openstack network-attachment-definitions.k8s.cni.cncf.io tenant
+        --for jsonpath='{.metadata.name}' --timeout=60s
+      - >-
+        oc wait -n openstack network-attachment-definitions.k8s.cni.cncf.io ironic
+        --for jsonpath='{.metadata.name}' --timeout=60s
+      - >-
+        oc wait -n openstack network-attachment-definitions.k8s.cni.cncf.io octavia
+        --for jsonpath='{.metadata.name}' --timeout=60s
+      - >-
+        oc wait -n openstack network-attachment-definitions.k8s.cni.cncf.io datacentre
+        --for jsonpath='{.metadata.name}' --timeout=60s
+
+  - name: OpenStack Control Plane
+    documentation: |
+      Deploy OpenStackControlPlane using the patched architecture repo with
+      hotstack-specific storage class and Neutron service plugins.
+    kustomize:
+      directory: ~/manifests/architecture/examples/dt/uni01alpha/control-plane
+      remote_src: true
+    wait_conditions:
       - >-
         oc wait -n openstack openstackcontrolplane controlplane
         --for condition=Ready --timeout=30m
 
   - name: Dataplane SSH key secret
+    documentation: |
+      Create the dataplane SSH secret as documented in Red Hat's official RHOSO docs.
+      This secret enables Ansible to manage RHEL nodes on the data plane.
     shell: >-
       oc create -n openstack secret generic dataplane-ansible-ssh-private-key-secret
       --save-config --dry-run=client
@@ -61,6 +239,9 @@ stages:
         --timeout=30s
 
   - name: Nova migration SSH key secret
+    documentation: |
+      Create the Nova migration SSH secret as documented in Red Hat's official RHOSO docs.
+      This secret enables migration of instances between Compute nodes.
     shell: >-
       oc create -n openstack secret generic nova-migration-ssh-key
       --save-config --dry-run=client
@@ -74,12 +255,24 @@ stages:
         --timeout=30s
 
   - name: Networker nodeset
+    documentation: |
+      Create the OpenStackDataPlaneNodeSet for networker nodes.
+
+      This uses a local hotstack kustomization that references the cloned
+      architecture repo and applies hotstack-specific patches for node
+      configuration (bootstrap commands, SSH access).
     kustomize:
-      directory: scenarios/uni01alpha/kustomize/networker
+      directory: kustomize/networker
 
   - name: EDPM nodeset
+    documentation: |
+      Create the OpenStackDataPlaneNodeSet for EDPM compute nodes.
+
+      This uses a local hotstack kustomization that references the cloned
+      architecture repo and applies hotstack-specific patches for node
+      configuration (bootstrap commands, SSH access).
     kustomize:
-      directory: scenarios/uni01alpha/kustomize/edpm
+      directory: kustomize/edpm
 
   - name: Wait for nodesets (Networker and EDPM)
     wait_conditions:
@@ -91,12 +284,22 @@ stages:
         --for condition=SetupReady --timeout=10m
 
   - name: Networker deployment
+    documentation: |
+      Create the OpenStackDataPlaneDeployment for networker nodes.
+
+      This uses a local hotstack kustomization that references the cloned
+      architecture repo's deployment component for networker nodes.
     kustomize:
-      directory: scenarios/uni01alpha/kustomize/networker-deployment
+      directory: kustomize/networker-deployment
 
   - name: EDPM deployment
+    documentation: |
+      Create the OpenStackDataPlaneDeployment for EDPM compute nodes.
+
+      This uses a local hotstack kustomization that references the cloned
+      architecture repo's deployment component for EDPM nodes.
     kustomize:
-      directory: scenarios/uni01alpha/kustomize/dataplane-deployment
+      directory: kustomize/dataplane-deployment
 
   - name: Wait for deployments (Networker and EDPM)
     wait_conditions:

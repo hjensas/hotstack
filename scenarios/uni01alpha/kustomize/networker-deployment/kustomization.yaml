@@ -2,6 +2,9 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-# Reference the remote networker deployment (uses nodeset name: networker-nodes)
+# Reference the cloned architecture repo networker deployment component.
+# The ../../ path resolves from manifests_dir (/home/zuul/manifests/kustomize/networker-deployment)
+# back to /home/zuul/manifests/architecture/dt/uni01alpha/networker
+# Note: Data plane components are in dt/ (not examples/dt/) in the architecture repo
 components:
-  - https://github.com/openstack-k8s-operators/architecture/dt/uni01alpha/networker?ref=main
+  - ../../architecture/dt/uni01alpha/networker

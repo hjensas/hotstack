@@ -2,10 +2,13 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-# Reference the remote architecture repo (includes upstream edpm values)
-components:
-  - https://github.com/openstack-k8s-operators/architecture/examples/dt/uni01alpha/edpm?ref=main
+# Reference the cloned and patched architecture repo.
+# The ../../ path resolves from manifests_dir (/home/zuul/manifests/kustomize/edpm)
+# back to /home/zuul/manifests/architecture/examples/dt/uni01alpha/edpm
+# Note: Nodeset resources are in examples/dt/, deployment components are in dt/
+resources:
+  - ../../architecture/examples/dt/uni01alpha/edpm
 
 # Merge hotstack-specific overrides
-patchesStrategicMerge:
-  - hotstack-values.yaml
+patches:
+  - path: hotstack-values.yaml
